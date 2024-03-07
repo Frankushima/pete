@@ -406,9 +406,10 @@ if __name__ == '__main__':
     detect_thread.start()
     
     # sh*tty thread lock - causes error, will look into later
-    while not flag:
-        time.sleep(1)
+    # while not flag:
+    #     time.sleep(1)
     
+    # gets a black screen for a minute due to loading the model LMAO
     root.mainloop()
     
     # with torch.no_grad():
