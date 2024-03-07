@@ -268,25 +268,42 @@ class LoadStreams:  # multiple IP or RTSP cameras
         self.mode = 'stream'
         self.img_size = img_size
         self.stride = stride
+        self.cameraMatrix, self.dist = pickle.load(open("calibration.pkl","rb"))
+        
+        ############## UNDISTORTION #####################################################
+
+        h,  w = 1080 , 1920
+        self.newCameraMatrix, self.roi = cv2.getOptimalNewCameraMatrix(self.cameraMatrix, self.dist, (w,h), 1, (w,h))
+        self.mapx, self.mapy = cv2.initUndistortRectifyMap(self.cameraMatrix, self.dist, None, self.newCameraMatrix, (w,h), 5)
 
         if os.path.isfile(sources):
             with open(sources, 'r') as f:
                 sources = [x.strip() for x in f.read().strip().splitlines() if len(x.strip())]
         else:
             sources = [sources]
-
+        
         n = len(sources)
         self.imgs = [None] * n
         self.sources = [clean_str(x) for x in sources]  # clean source names for later
         for i, s in enumerate(sources):
             # Start the thread to read frames from the video stream
             print(f'{i + 1}/{n}: {s}... ', end='')
+            
             url = eval(s) if s.isnumeric() else s
-            if 'youtube.com/' in str(url) or 'youtu.be/' in str(url):  # if source is YouTube video
+            if 'youtube.com/' in str(url) or 'yqqqqqqqqqoutu.be/' in str(url):  # if source is YouTube video
                 check_requirements(('pafy', 'youtube_dl'))
                 import pafy
                 url = pafy.new(url).getbest(preftype="mp4").url
-            cap = cv2.VideoCapture(url)
+            if i == 0:
+                cap = cv2.VideoCapture(url,cv2.CAP_V4L2)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+                cap.set(cv2.CAP_PROP_FPS, 60)
+            elif i == 1:
+                cap = cv2.VideoCapture(url, cv2.CAP_GSTREAMER)
+            else:
+                cap = cv2.VideoCapture(url)
+            
             assert cap.isOpened(), f'Failed to open {s}'
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -300,7 +317,10 @@ class LoadStreams:  # multiple IP or RTSP cameras
 
         # check for common shapes
         s = np.stack([letterbox(x, self.img_size, stride=self.stride)[0].shape for x in self.imgs], 0)  # shapes
+        
+        # TODO: need to figure out how to force yolov7 to recognize the shapes are the same
         self.rect = np.unique(s, axis=0).shape[0] == 1  # rect inference if all shapes equal
+        
         if not self.rect:
             print('WARNING: Different stream shapes detected. For optimal performance supply similarly-shaped streams.')
 
@@ -311,8 +331,23 @@ class LoadStreams:  # multiple IP or RTSP cameras
             n += 1
             # _, self.imgs[index] = cap.read()
             cap.grab()
-            if n == 4:  # read every 4th frame
+            if n == 3:  # read every 4th frame
                 success, im = cap.retrieve()
+                
+                # rotate and undistort
+                x, y, w, h = self.roi
+                
+                if index == 0:
+                    im = cv2.rotate(im, cv2.ROTATE_180)
+                    im = cv2.remap(im, self.mapx, self.mapy, cv2.INTER_LINEAR)
+                    # crop the image - minus one to fix shapes 
+                    im = im[y:y+h, x:x+w-1]
+                else:
+                #     # crop the image - fixes shape issue
+                #     # might have to add more logic here in the future? is it centered
+                #     im = im[y:y+h, x:x+w]
+                    im= im[151:151+670, 55:55+1186]
+                
                 self.imgs[index] = im if success else self.imgs[index] * 0
                 n = 0
             time.sleep(1 / self.fps)  # wait time
