@@ -178,7 +178,7 @@ class LoadImages:  # for inference
                     ret_val, img0 = self.cap.read()
 
             self.frame += 1
-            print(f'video {self.count + 1}/{self.nf} ({self.frame}/{self.nframes}) {path}: ', end='')
+            # print(f'video {self.count + 1}/{self.nf} ({self.frame}/{self.nframes}) {path}: ', end='')
 
         else:
             # Read image
@@ -269,6 +269,7 @@ class LoadStreams:  # multiple IP or RTSP cameras
         self.img_size = img_size
         self.stride = stride
         self.cameraMatrix, self.dist = pickle.load(open("calibration.pkl","rb"))
+        # self.distortion = (sources == 'sources_live.txt')
         
         ############## UNDISTORTION #####################################################
 
@@ -294,6 +295,8 @@ class LoadStreams:  # multiple IP or RTSP cameras
                 check_requirements(('pafy', 'youtube_dl'))
                 import pafy
                 url = pafy.new(url).getbest(preftype="mp4").url
+                
+            # use hardcoded values for distortion correction
             if i == 0:
                 cap = cv2.VideoCapture(url,cv2.CAP_V4L2)
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)

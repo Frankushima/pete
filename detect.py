@@ -131,7 +131,7 @@ def detect(save_img=False):
             temp[i] = im0
 
             # Print time (inference + NMS)
-            print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
+            # print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
 
             # Save results (image with detections)
             if save_img:
@@ -155,8 +155,14 @@ def detect(save_img=False):
         
         # Stream results
         if view_img:
-            final = cv2.vconcat(temp)
-            cv2.imshow('output', cv2.resize(final, (0,0), fx=0.5, fy=0.5) )
+            # cameras
+            # final = cv2.vconcat(temp)
+            # cv2.imshow('output', cv2.resize(final, (0,0), fx=0.5, fy=0.5) )
+            
+            # video
+            cv2.imshow('output',temp[0])
+            
+            
             cv2.waitKey(1)  # 1 millisecond
 
     if save_txt or save_img:

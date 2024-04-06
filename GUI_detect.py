@@ -6,6 +6,7 @@ import cv2
 import torch
 import torch.backends.cudnn as cudnn
 from numpy import random
+import numpy as np
 
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
@@ -27,7 +28,8 @@ procedure = []
 gui = None
 flag = False
 
-def detect(gui,save_img=False):
+def detect(save_img=False):
+    global gui, flag
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
@@ -139,11 +141,11 @@ def detect(gui,save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
+                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
             temp[i] = im0
 
             # Print time (inference + NMS)
-            print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
+            # print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
 
             # Save results (image with detections)
             if save_img:
@@ -165,13 +167,19 @@ def detect(gui,save_img=False):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
         
-        flag = True # start GUI
+        
+        if not flag:
+            flag = True # start GUI
+            time.sleep(2) # let GUI start up
         
         # Stream results
         if view_img:
-            final = cv2.vconcat(temp)
+            # only stack videos on webcams two inputs
+            if source.endswith('.txt'):
+                final = cv2.vconcat(temp)
+            else:
+                final = temp[0]
             gui.set_frame(final)
-            # cv2.imshow('output', cv2.resize(final, (0,0), fx=0.5, fy=0.5) )
             
             cv2.waitKey(1)  # 1 millisecond
 
@@ -210,31 +218,54 @@ def decision_logic():
 class DisplayGUI:
     def __init__(self, app):
         """
-        Initializations of the GUI components.
+        Initializations of the GUI components for the loading screen, starts loading thread
+        :param app: a TK root object
+        """
+        self.app = app
+        self.app.title("Project Pete")
+        
+        # "responsive" sizing
+        self.min_width = int(self.app.winfo_screenwidth() * 0.85)
+        self.min_height = int(self.app.winfo_screenheight() * 0.7)
+        self.app.minsize(width=self.min_width, height=self.min_height)
+        
+        logo = ImageTk.PhotoImage(Image.open('pete.png').resize((445,200)))
+        self.logo_label = tk.Label(self.app,)
+        self.logo_label.pack(padx=(100, 300))
+        self.logo_label.config(image=logo)
+        self.logo_label.image = logo
+        
+        # TODO: get loading gif to work properly
+        # self.loading_label = tk.Label(self.app,)
+        # self.loading_label.pack(padx=(100, 200))
+        
+        # loading_thread = threading.Thread(target=self._update_loading_gif,args=[])
+        # loading_thread.daemon = True
+        # loading_thread.start()
+        
+        
+        self.loading_label = tk.Label(self.app, text="Please wait, loading model")
+        self.loading_label.pack(padx=(100, 100))
+        
+        loading_model_thread = threading.Thread(target=self._check_loaded_model,args=[])
+        loading_model_thread.daemon = True
+        loading_model_thread.start()
+    
+    def procedure_tracking_setup(self, app):
+        """
+        Initializations of the GUI components for the actual procedure tracking system.
         :param app: a TK root object
         """
         global procedure, current_step
 
-        self.app = app
-        self.app.title("Project Pete")
-        # "responsive" sizing
-        min_width = int(self.app.winfo_screenwidth() * 0.85)
-        min_height = int(self.app.winfo_screenheight() * 0.7)
-        self.app.minsize(width=min_width, height=min_height)
-
         # Video Frame ========================================================
         # Create a frame for the live stream
-        self.left_frame = tk.Frame(self.app, bg=dark_theme_background, width=0.7 * min_width)
+        self.left_frame = tk.Frame(self.app, bg=dark_theme_background, width=0.7 * self.min_width)
         self.left_frame.pack(side="left", fill="both", expand=False)
 
         # Create a label to display stream
         self.livestream = tk.Label(self.left_frame, )
         self.livestream.pack(padx=(80, 50), pady=(40, 0))
-
-        # # Separate thread for live stream to not cause lagging - use set_frame instead for detect
-        # update_thread = threading.Thread(target=self._update_frame)
-        # update_thread.daemon = True
-        # update_thread.start()
 
         # Logs ========================================================
         lw = int(self.left_frame.winfo_screenwidth() * 0.5)
@@ -264,7 +295,7 @@ class DisplayGUI:
 
         # Procedure List ===================================================
         # Create a frame for the steps list (30% of total width)
-        self.right_frame = tk.Frame(app, width=0.3 * min_width, bg=dark_theme_background)
+        self.right_frame = tk.Frame(app, width=0.3 * self.min_width, bg=dark_theme_background)
         self.right_frame.pack(side="right", fill="both", expand=True)
 
         # Scrollable list view
@@ -350,12 +381,42 @@ class DisplayGUI:
         self.mark_step_done(DONE_OV)
     
     def set_frame(self, frame):
+        """
+        Updates detection preview on the left
+        """
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.resize(frame, (750, 450))
         photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
         self.livestream.config(image=photo)
         self.livestream.image = photo
 
+    def _check_loaded_model(self):
+        """
+        Checks if model has finished loading, when finished, it will initialize the procedure tracking GUI and start detection
+        """
+        detect_thread = threading.Thread(target=detect,args=[])
+        detect_thread.daemon = True
+        detect_thread.start()
+        
+        while not flag:
+            time.sleep(1)
+        
+        self.logo_label.destroy()
+        self.loading_label.destroy()
+        
+        self.procedure_tracking_setup(self.app)
+    
+    def _update_loading_gif(self):
+        i = 0
+        while not flag:
+            i = i + 1
+            i= i % 15
+            
+            loading = ImageTk.PhotoImage(tk.PhotoImage(file='loading.gif',format='gif -index %i' %i))
+            self.loading_label.config(image=loading)
+            self.loading_label.image = loading
+            time.sleep(0.1)
+    
     def _update_runtime(self):
         """
         Helper function to update runtime clock
@@ -373,6 +434,8 @@ class DisplayGUI:
             self.runtime_label.config(text=runtime_str)
 
             time.sleep(1)  # Update the label every 1 second
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -400,22 +463,6 @@ if __name__ == '__main__':
 
     root = tk.Tk()
     gui = DisplayGUI(root)
-    
-    detect_thread = threading.Thread(target=detect,args=[gui])
-    detect_thread.daemon = True
-    detect_thread.start()
-    
-    # sh*tty thread lock - causes error, will look into later
-    # while not flag:
-    #     time.sleep(1)
-    
-    # gets a black screen for a minute due to loading the model LMAO
+
     root.mainloop()
     
-    # with torch.no_grad():
-    #     if opt.update:  # update all models (to fix SourceChangeWarning)
-    #         for opt.weights in ['yolov7.pt']:
-    #             detect()
-    #             strip_optimizer(opt.weights)
-    #     else:
-    #         detect()
