@@ -34,5 +34,6 @@ colors = {
 
 dark_theme_background = "#252525"
 override_button_color = "#932323"
+revert_button_color = '#0B6623'
 live_stream_url = "https://api.ucsb.edu/dining/cams/v2/stream/carrillo?ucsb-api-key=0AVpBy0HfloWaEQHPanHTGSYmXusaNIJ"
 # live_stream_url = "http://d3rlna7iyyu8wu.cloudfront.net/DolbyVision_Atmos/profile8.1_DASH/p8.1.mpd"

@@ -211,8 +211,8 @@ def decision_logic():
         # data['lala'] = wawa
 
         # TESTING ONLY: always validate to true after 10 seconds (lol)
-        if procedure[current_step].validate(data):
-            gui.mark_step_done(DONE)
+        # if procedure[current_step].validate(data):
+        #     gui.mark_step_done(DONE)
         time.sleep(10)
 
 class DisplayGUI:
@@ -320,9 +320,13 @@ class DisplayGUI:
             if step.status == IN_PROGRESS: current_step = step.index
             step.build(self.procedure_list)
 
+        # Revert button
+        self.revert = tk.Label(self.right_frame, fg='white', bg=revert_button_color, text="Revert - undo step",borderwidth=5)
+        self.revert.pack(fill="x", expand=False, padx=(10, 25), pady=(20, 10))
+        self.revert.bind("<ButtonRelease-1>", self.revert_mark_done)
+
         # Override button
-        self.override = tk.Label(self.right_frame, fg='white', bg=override_button_color, text="Override - mark done",
-                                 borderwidth=5)
+        self.override = tk.Label(self.right_frame, fg='white', bg=override_button_color, text="Override - mark done",borderwidth=5)
         self.override.pack(fill="x", expand=False, padx=(10, 25), pady=(20, 10))
         self.override.bind("<ButtonRelease-1>", self.override_mark_done)
 
@@ -379,6 +383,19 @@ class DisplayGUI:
         Overrides logic decision (mark as complete - OV)
         """
         self.mark_step_done(DONE_OV)
+    
+    def revert_mark_done(self,e):
+        global current_step, procedure
+
+        if current_step == 1: return
+        
+        procedure[current_step - 2].update_status(IN_PROGRESS)
+        procedure[current_step - 1].update_status(NOT_DONE)
+
+        self.canvas.yview_moveto(-1.0)
+        
+        current_step -= 1
+        print("reverted!")
     
     def set_frame(self, frame):
         """

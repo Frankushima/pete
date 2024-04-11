@@ -20,12 +20,15 @@ no-trace = skip tracing model step to make bootup faster
 Quirks with this setup:
 1. Video plays at slower speed to match detection rate
 
----------------------------------- FOR LIVE ONLY ---------------------------------------------------
-
 TODO: 
-- Add loading gif
-- Make video skip frames to simulate real time enviroment
+- Make video skip frames to simulate real time enviroment (DONE)
+- Add manual revert step (Additional info looks a bit off, but it technically works)
+- Add substeps with pictures for context
 - Add sensor stuff
+
+- Add loading gif
+
+---------------------------------- FOR LIVE ONLY ---------------------------------------------------
 
 Instructions for live object detection with two cameras:
 - Launch raspi's gstreamer pipeline (1296x972 for max viewing angle)
