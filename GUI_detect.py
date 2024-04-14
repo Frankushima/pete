@@ -211,8 +211,8 @@ def decision_logic():
         # data['lala'] = wawa
 
         # TESTING ONLY: always validate to true after 10 seconds (lol)
-        if procedure[current_step].validate(data):
-            gui.mark_step_done(DONE)
+        # if procedure[current_step].validate(data):
+        #     gui.mark_step_done(DONE)
         time.sleep(10)
 
 class DisplayGUI:
@@ -229,28 +229,37 @@ class DisplayGUI:
         self.min_height = int(self.app.winfo_screenheight() * 0.7)
         self.app.minsize(width=self.min_width, height=self.min_height)
         
+        # Ensure closing of detect thread on quit
+        self.app.protocol('WM_DELETE_WINDOW', self.close_app)
+        
+        self.loading_frame = tk.Frame(self.app, bg=space_grey_background)
+        self.loading_frame.pack(fill="both", expand=True)
+        
         logo = ImageTk.PhotoImage(Image.open('pete.png').resize((445,200)))
-        self.logo_label = tk.Label(self.app,)
-        self.logo_label.pack(padx=(100, 300))
+        self.logo_label = tk.Label(self.loading_frame,bg=space_grey_background)
+        self.logo_label.pack(pady=50)
         self.logo_label.config(image=logo)
         self.logo_label.image = logo
         
-        # TODO: get loading gif to work properly
-        # self.loading_label = tk.Label(self.app,)
-        # self.loading_label.pack(padx=(100, 200))
+        # Loading gif
+        self.loading_wheel_label = tk.Label(self.loading_frame,bg=space_grey_background)
+        self.loading_wheel_label.pack(pady = 50)
         
-        # loading_thread = threading.Thread(target=self._update_loading_gif,args=[])
-        # loading_thread.daemon = True
-        # loading_thread.start()
+        loading_thread = threading.Thread(target=self._update_loading_gif,args=[])
+        loading_thread.daemon = True
+        loading_thread.start()
         
-        
-        self.loading_label = tk.Label(self.app, text="Please wait, loading model")
-        self.loading_label.pack(padx=(100, 100))
+        self.loading_label = tk.Label(self.loading_frame, fg='white', text="Please wait, loading model", bg=space_grey_background,
+                                           font=("Arial", 24, 'bold'))
+        self.loading_label.pack(pady=25)
         
         loading_model_thread = threading.Thread(target=self._check_loaded_model,args=[])
         loading_model_thread.daemon = True
         loading_model_thread.start()
     
+    def close_app(self):
+        self.app.destroy()
+        
     def procedure_tracking_setup(self, app):
         """
         Initializations of the GUI components for the actual procedure tracking system.
@@ -311,7 +320,6 @@ class DisplayGUI:
         self.canvas.configure(yscrollcommand=self.scrollbar.set)
         self.canvas.pack(side="top", fill="both", expand=True, pady=(40, 0))
         self.scrollbar.pack(side="left", fill="y", expand=False)
-        self.procedure_list.pack(side="right", fill="both", expand=True)
         self.canvas.create_window((0, 0), window=self.procedure_list, anchor="nw", tags="canvas_frame")
 
         procedure = self.get_procedure()
@@ -319,10 +327,16 @@ class DisplayGUI:
         for step in procedure:
             if step.status == IN_PROGRESS: current_step = step.index
             step.build(self.procedure_list)
+        
+        self.procedure_list.pack(side="right", fill="both", expand=True) # pack after resizing ensures procedure list is correct size
+        
+        # Revert button
+        self.revert = tk.Label(self.right_frame, fg='white', bg=revert_button_color, text="Revert - undo step",borderwidth=5)
+        self.revert.pack(fill="x", expand=False, padx=(10, 25), pady=(20, 10))
+        self.revert.bind("<ButtonRelease-1>", self.revert_mark_done)
 
         # Override button
-        self.override = tk.Label(self.right_frame, fg='white', bg=override_button_color, text="Override - mark done",
-                                 borderwidth=5)
+        self.override = tk.Label(self.right_frame, fg='white', bg=override_button_color, text="Override - mark done",borderwidth=5)
         self.override.pack(fill="x", expand=False, padx=(10, 25), pady=(20, 10))
         self.override.bind("<ButtonRelease-1>", self.override_mark_done)
 
@@ -380,6 +394,18 @@ class DisplayGUI:
         """
         self.mark_step_done(DONE_OV)
     
+    def revert_mark_done(self,e):
+        global current_step, procedure
+
+        if current_step == 1: return
+        
+        procedure[current_step - 2].update_status(IN_PROGRESS)
+        procedure[current_step - 1].update_status(NOT_DONE, isFocus=False)
+
+        self.canvas.yview_moveto(-1.0)
+        
+        current_step -= 1
+    
     def set_frame(self, frame):
         """
         Updates detection preview on the left
@@ -401,20 +427,27 @@ class DisplayGUI:
         while not flag:
             time.sleep(1)
         
-        self.logo_label.destroy()
-        self.loading_label.destroy()
-        
+        self.loading_frame.destroy()
+                
         self.procedure_tracking_setup(self.app)
     
     def _update_loading_gif(self):
+        
+        frames = Image.open('loading.gif').n_frames
+        loading_frames = []
+        
+        # load frames
+        for i in range(frames):
+            temp = tk.PhotoImage(file='loading.gif',format=f"gif -index {i}") # TODO: downscale loading = less crunchy
+            loading_frames.append(temp)
+        
         i = 0
         while not flag:
             i = i + 1
-            i= i % 15
+            i = i % frames
             
-            loading = ImageTk.PhotoImage(tk.PhotoImage(file='loading.gif',format='gif -index %i' %i))
-            self.loading_label.config(image=loading)
-            self.loading_label.image = loading
+            self.loading_wheel_label.config(image=loading_frames[i])
+            self.loading_wheel_label.image = loading_frames[i]
             time.sleep(0.1)
     
     def _update_runtime(self):
@@ -465,4 +498,6 @@ if __name__ == '__main__':
     gui = DisplayGUI(root)
 
     root.mainloop()
+    
+    exit() # close program and all other threads after destroy
     

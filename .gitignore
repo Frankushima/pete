@@ -1,21 +1,14 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
-*.jpg
-*.jpeg
-*.png
 *.bmp
 *.tif
 *.tiff
 *.heic
-*.JPG
-*.JPEG
-*.PNG
+*.MOV
+*.mp4
 *.BMP
 *.TIF
 *.TIFF
 *.HEIC
-*.mp4
-*.mov
-*.MOV
 *.avi
 *.data
 *.json
@@ -54,8 +47,8 @@ val2017.zip
 
 # Neural Network weights -----------------------------------------------------------------------------------------------
 *.weights
-*.pt
 *.pb
+*.pt
 *.onnx
 *.engine
 *.mlmodel

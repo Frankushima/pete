@@ -11,21 +11,23 @@ Instructions for running with video:
 python GUI_detect.py --weights=yolov7-tiny.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
 
 Arguments:
-weights = which model to use
-source = test video file location
-nosave = don't save results
-view-img = needs to be there for the GUI to work
-no-trace = skip tracing model step to make bootup faster
+- weights = which model to use
+- source = test video file location
+- nosave = don't save results
+- view-img = needs to be there for the GUI to work
+- no-trace = skip tracing model step to make bootup faster
 
 Quirks with this setup:
-1. Video plays at slower speed to match detection rate
-
----------------------------------- FOR LIVE ONLY ---------------------------------------------------
+1. Video plays at slower speed to match detection rate (HACK: made it skip every other frame)
 
 TODO: 
-- Add loading gif
-- Make video skip frames to simulate real time enviroment
+- Make video skip frames to simulate real time enviroment (DONE)
+- Add loading gif (DONE)
+- Add manual revert step (DONE)
+- Add substeps with pictures for context (WIP)
 - Add sensor stuff
+
+---------------------------------- FOR LIVE ONLY ---------------------------------------------------
 
 Instructions for live object detection with two cameras:
 - Launch raspi's gstreamer pipeline (1296x972 for max viewing angle)
@@ -39,6 +41,19 @@ Quirks with this setup:
 HACK: Stop gstreamer pipeline before script terminates
 SHTF: REISUB board thru micro USB + keyboard
 
-2. On-board camera seems to only run properly with V4L2 instead of gstreamer with OpenCV
+2. If you switch USB devices while the model is loading, it might freeze the board... edge device things
+SHTF: REISUB board thru micro USB + keyboard
+
+3. On-board camera seems to only run properly with V4L2 instead of gstreamer with OpenCV
 HACK: hardcoded OpenCV flags
 
+
+-------------------------------------PROGRESS REPORTS----------------------------------
+
+4/13:
+- Fixed procedure list scaling issues
+- Fixed focus bug on reverting steps
+- Added loading gif
+- Fixed exiting window not exiting program bug
+- Added pictures to steps (WIP)
+- Fixed gitignore to make sure stuff is downloaded correctly

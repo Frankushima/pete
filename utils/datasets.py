@@ -166,6 +166,7 @@ class LoadImages:  # for inference
         if self.video_flag[self.count]:
             # Read video
             self.mode = 'video'
+            self.cap.grab() # grab one frame to skip - NOTE: might change this later to skip like 3 frames if needed
             ret_val, img0 = self.cap.read()
             if not ret_val:
                 self.count += 1
@@ -177,8 +178,8 @@ class LoadImages:  # for inference
                     self.new_video(path)
                     ret_val, img0 = self.cap.read()
 
-            self.frame += 1
-            # print(f'video {self.count + 1}/{self.nf} ({self.frame}/{self.nframes}) {path}: ', end='')
+            self.frame += 2
+            print(f'video {self.count + 1}/{self.nf} ({self.frame}/{self.nframes}) {path}: ', end='\n')
 
         else:
             # Read image

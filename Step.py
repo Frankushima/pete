@@ -1,6 +1,6 @@
 from shared import *
 import tkinter as tk
-
+from PIL import Image, ImageTk
 
 class Step:
     def __init__(self, index, title, description, status):
@@ -13,6 +13,7 @@ class Step:
         # GUI Frames
         self.step_frame = None
         self.info_frame = None
+        self.image_frame = None
         self.status_label = None
         self.description_label = None
         self.title_frame = None
@@ -35,7 +36,14 @@ class Step:
         self.info_frame = tk.Label(self.step_frame, fg=color['txt'], bg=color['bg'],
                                    text=f"Status: {self.status}\nAdditional Info: {self.description}\n",
                                    padx=20, pady=5, anchor='w', justify="left")
-
+        
+        self.image_frame = tk.Label(self.step_frame, bg=color['bg'], pady=5)
+        
+        # load helper image - TODO: add arguments for image and make it scale, this is currently hardcoded to be a cat 
+        image = ImageTk.PhotoImage(Image.open('cat.png').resize((200,100)))
+        self.image_frame.config(image=image)
+        self.image_frame.image = image
+        
         # pack into frame
         self.title_frame.pack(fill="both", expand=False)
         self.index_label.pack(side="left")
@@ -46,6 +54,7 @@ class Step:
         if self.status == IN_PROGRESS:
             self.isFocus = True
             self.info_frame.pack(fill="x")
+            self.image_frame.pack(fill="x")
 
         def on_click(e):
             print(f"{self.index} {self.status}")
@@ -53,16 +62,18 @@ class Step:
             self.isFocus = not self.isFocus
             if self.isFocus:
                 self.info_frame.pack(fill="x")
+                self.image_frame.pack(fill="x")
             else:
                 self.info_frame.pack_forget()
+                self.image_frame.pack_forget()
 
         self.index_label.bind(f"<Button-1>", on_click)
         self.description_label.bind(f"<Button-1>", on_click)
 
     def update_status(self, new_status, isFocus=True):
         self.status = new_status
-        self._update(True)  # force true for now
-
+        self._update(isFocus) 
+    
     def _update(self, isFocus):
         color = colors[self.status]
         self.title_frame['bg'] = color['bg']
@@ -76,12 +87,16 @@ class Step:
         self.info_frame['fg'] = color['txt']
         self.info_frame['bg'] = color['bg']
         self.info_frame['text'] = f"Status: {self.status}\nAdditional Info: {self.description}\n"
+        self.image_frame['bg'] = color['bg']
+        
         self.isFocus = isFocus or self.status == IN_PROGRESS
 
         if self.isFocus:
             self.info_frame.pack(fill="x")
+            self.image_frame.pack(fill="x")
         else:
             self.info_frame.pack_forget()
+            self.image_frame.pack_forget()
 
     def validate(self, data):
         """
