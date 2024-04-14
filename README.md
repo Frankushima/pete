@@ -6,8 +6,14 @@ Its also runs on a Jetson Orin Nano.
 
 Note: a lot of stuff is hardcoded due to basically trial and error to get this stubborn ass board to run this thing
 
-## Instructions for running with video (Read This):
-- Run a command similar to this one:
+## Setup for running with video (Read This):
+1. Download testing videos from Slack or use ur own
+2. Download model weight files from [here](https://drive.google.com/drive/u/1/folders/1_MV9JUMt3BgdXSHATWRznBClBUjr-OBL)
+3. Run a test run with default detect:
+```bash
+python detect.py --weights=yolov7-tiny.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
+```
+4. Run a command similar to this one (This is the actual command you will use from now on):
 ```bash
 python GUI_detect.py --weights=yolov7-tiny.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
 ```
