@@ -28,6 +28,7 @@ class Step:
                                     font=("Arial", 24),
                                     padx=20, pady=5, width=5, anchor='w')
         self.description_label = tk.Label(self.title_frame, fg=color['txt'], bg=color['bg'], text=self.title, padx=10,
+                                          font=("Arial", 20),
                                           pady=5,
                                           anchor='w')
         self.status_label = tk.Label(self.title_frame, fg=status_color[self.status], bg=colors[self.status]['bg'],
@@ -35,6 +36,7 @@ class Step:
 
         self.info_frame = tk.Label(self.step_frame, fg=color['txt'], bg=color['bg'],
                                    text=f"Status: {self.status}\nAdditional Info: {self.description}\n",
+                                   font=("Arial", 15),
                                    padx=20, pady=5, anchor='w', justify="left")
         
         self.image_frame = tk.Label(self.step_frame, bg=color['bg'], pady=5)
@@ -98,7 +100,7 @@ class Step:
             self.info_frame.pack_forget()
             self.image_frame.pack_forget()
 
-    def validate(self, data):
+    def validate(self, data=None):
         """
         Crux of decision logic goes here.
 
@@ -109,3 +111,6 @@ class Step:
         # TODO: define step's criteria & validate against that
 
         return True
+    
+    def update_description(self, description):
+        self.description += f"\n {description} \n"
