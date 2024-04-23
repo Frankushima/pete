@@ -261,20 +261,21 @@ def decision_logic():
         while current_step == 0:
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
-
             num_class_detected = len(data)
             
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
-                procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
-                sub_conditions[0] = True
+                if hand_count > 1:
+                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    sub_conditions[0] = True
 
             # SUB 1 : is there a spindle? (index = 7)
             if not sub_conditions[1] and sub_conditions[0] == True:
                 spindle_count, spindle_det = logic_tools.find_class(data, 7)
-                procedure[current_step].update_description(u'Found Spindle 👍')
-                sub_conditions[1] = True
+                if spindle_count == 1:
+                    procedure[current_step].update_description(u'Found Spindle 👍')
+                    sub_conditions[1] = True
             
             # SUB 2 : are they overlapped? hand holding spindle? 
             if not sub_conditions[2] and sub_conditions[1] == True:
@@ -394,9 +395,34 @@ def decision_logic():
                 gui.mark_step_done(DONE)
 
             # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
+        
+
+
+        sub_conditions= [False for i in range(7)]
+        while current_step == 1:
+            # procedure[current_step].update_status(IN_PROGRESS)
+            data = cv_queue.get()
+            num_class_detected = len(data)
+
+            # SUB 0 : is there a hand?
+            if not sub_conditions[0]:
+                hand_count, hands_det = logic_tools.find_hands(data)
+                if hand_count > 1:
+                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    sub_conditions[0] = True
+
+            # SUB 1 : is there a double flat bottom bracket?
+            if not sub_conditions[1] and sub_conditions[0] == True:
+                bolt_count, bolt_det = logic_tools.find_class(data, 8)
+                if bolt_count == 1:
+                    procedure[current_step].update_description(u'Found Double flat bottom bracket👍')
+                    sub_conditions[1] = True
 
             
-        while current_step > 1:
+
+
+
+        while current_step > 2:
             print("In Step 2 Now")
             time.sleep(10)
             print("Mark done now")
