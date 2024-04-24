@@ -23,13 +23,19 @@ from shared import *
 from Step import Step
 from PIL import Image, ImageTk
 
+import logic_tools
+import queue
+import math
+import emoji
+
 current_step = 0
 procedure = []
 gui = None
 flag = False
+cv_queue = queue.Queue()
 
 def detect(save_img=False):
-    global gui, flag
+    global gui, flag, cv_queue
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
@@ -80,6 +86,7 @@ def detect(save_img=False):
     old_img_b = 1
 
     t0 = time.time()
+
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -111,7 +118,6 @@ def detect(save_img=False):
 
         # Process detections
         temp = [None,None]
-        
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
@@ -131,6 +137,12 @@ def detect(save_img=False):
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+                hand_count, hand_det = logic_tools.find_hands(det)
+                if hand_count == 2:
+                    L_hand_det, R_hand_det = logic_tools.RL_hands(hand_det)
+
+                cv_queue.put(det)
+
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
@@ -140,8 +152,21 @@ def detect(save_img=False):
                             f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
                     if save_img or view_img:  # Add bbox to image
-                        label = f'{names[int(cls)]} {conf:.2f}'
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                        if cls == 4 and hand_count == 2: # 4 is for hand (might need to change in future)
+                            xyxy_list_tensor = torch.stack(xyxy) # convert type for comparison
+                            
+                            if torch.all(xyxy_list_tensor == L_hand_det[:4]):
+                                label = f"Left Hand {conf:.2f}"
+                                plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                                
+
+                            elif torch.all(xyxy_list_tensor == R_hand_det[:4]):
+                                label = f"Right Hand {conf:.2f}"
+                                plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                        
+                        else:
+                            label = f'{names[int(cls)]} {conf:.2f}'
+                            plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
             temp[i] = im0
 
             # Print time (inference + NMS)
@@ -166,8 +191,7 @@ def detect(save_img=False):
                             save_path += '.mp4'
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
-        
-        
+
         if not flag:
             flag = True # start GUI
             time.sleep(2) # let GUI start up
@@ -183,6 +207,8 @@ def detect(save_img=False):
             
             cv2.waitKey(1)  # 1 millisecond
 
+
+
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
         #print(f"Results saved to {save_dir}{s}")
@@ -190,7 +216,7 @@ def detect(save_img=False):
     print(f'Done. ({time.time() - t0:.3f}s)')
 
 def decision_logic():
-    global procedure, current_step, gui
+    global procedure, current_step, gui, cv_queue
     while True:     # prevent calling before initialization
         if gui is not None: break
 
@@ -205,7 +231,7 @@ def decision_logic():
         :param data: a dict of CV data (bounding boxes) and sensor data. Or, evoke methods in main to get these data.
         """
 
-        data = "ALPACAS"
+        
         # data['CV'] = blah blah
         # data['sensor'] = blob blob
         # data['lala'] = wawa
@@ -213,7 +239,253 @@ def decision_logic():
         # TESTING ONLY: always validate to true after 10 seconds (lol)
         # if procedure[current_step].validate(data):
         #     gui.mark_step_done(DONE)
-        time.sleep(10)
+        
+        # Currently validate function will not be used because of the code structure
+        # Each step has its own validate function however, the class itself cannot modify the validate function
+        # the validate method willb e implemented here hardcoded (at least for now...)
+
+        
+        # variables for trendline, must be initalize outside of steps
+        # Sub3
+        s3_prev_dist_R_Spindle = -math.inf
+        s3_trend_R_Spindle = logic_tools.Trendline.INITIALIZE
+
+        s3_prev_dist_L_Spindle = math.inf
+        s3_trend_L_Spindle = logic_tools.Trendline.INITIALIZE
+
+        # Sub5
+        s5_prev_dist_Spindle = -math.inf
+        s5_trend_Spindle = logic_tools.Trendline.INITIALIZE
+
+        sub_conditions= [False for i in range(7)]
+        while current_step == 0:
+            procedure[current_step].update_status(IN_PROGRESS)
+            data = cv_queue.get()
+            num_class_detected = len(data)
+            
+            # SUB 0 : is there a hand?
+            if not sub_conditions[0]:
+                hand_count, hands_det = logic_tools.find_hands(data)
+                if hand_count > 1:
+                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    sub_conditions[0] = True
+
+            # SUB 1 : is there a spindle? (index = 7)
+            if not sub_conditions[1] and sub_conditions[0] == True:
+                spindle_count, spindle_det = logic_tools.find_class(data, 7)
+                if spindle_count == 1:
+                    procedure[current_step].update_description(u'Found Spindle 👍')
+                    sub_conditions[1] = True
+            
+            # SUB 2 : are they overlapped? hand holding spindle? 
+            if not sub_conditions[2] and sub_conditions[1] == True:
+                over_count = 0  
+
+                if num_class_detected > 1:
+                    over_count, over_det = logic_tools.find_overlapping(data)
+                    if over_count == 1:
+                        single_overlap_pair = over_det[0]
+                        # if the overlapping is between spindle and hand
+                        if ((single_overlap_pair[0][5] == 7 and single_overlap_pair[1][5] == 4) or 
+                        (single_overlap_pair[0][5] == 4 and single_overlap_pair[1][5] == 7)):
+                            procedure[current_step].update_description(u'Hand holding Spindle 👍')
+                            sub_conditions[2] = True
+
+            # SUB 3 : leaving right hand + increasing left hand
+            # TODO: Fix IOU not gonna work for varying size for bounding box
+            # Using Euclidean Distane for now
+            if not sub_conditions[3] and sub_conditions[2] == True:
+                s3_curr_dist_R_Spindle = -1
+                s3_curr_dist_L_Spindle = -1
+
+                if num_class_detected > 1:
+                    hand_count, hands_det = logic_tools.find_hands(data)
+                    over_count, over_det = logic_tools.find_overlapping(data)
+                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
+
+                    if hand_count == 2 and spindle_count == 1:
+                        L_hand_det, R_hand_det = logic_tools.RL_hands(hands_det)
+                            
+                        spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
+
+                        # Right Hand
+                        R_hand_center = logic_tools.get_box_center(*R_hand_det[:4])
+                        s3_curr_dist_R_Spindle = logic_tools.get_euclidean_distance(R_hand_center, spindle_center)
+                        
+                        # Spindle Leaving Right Hand 
+                        if s3_curr_dist_R_Spindle > s3_prev_dist_R_Spindle:
+                            s3_trend_R_Spindle = logic_tools.Trendline.INCREASING
+
+                        elif s3_curr_dist_R_Spindle < s3_prev_dist_R_Spindle:
+                            s3_trend_R_Spindle = logic_tools.Trendline.DECREASING
+                            
+                        s3_prev_dist_R_Spindle = s3_curr_dist_R_Spindle
+
+                        # Left Hand
+                        L_hand_center = logic_tools.get_box_center(*L_hand_det[:4])
+                        s3_curr_dist_L_Spindle = logic_tools.get_euclidean_distance(L_hand_center, spindle_center)
+
+                        # Spindling Going to Left Hand
+                        if s3_curr_dist_L_Spindle < s3_prev_dist_L_Spindle:
+                            s3_trend_L_Spindle = logic_tools.Trendline.DECREASING
+
+                        elif s3_curr_dist_L_Spindle > s3_prev_dist_L_Spindle:
+                            s3_trend_L_Spindle = logic_tools.Trendline.INCREASING
+                        
+                        s3_prev_dist_L_Spindle = s3_curr_dist_L_Spindle
+
+                        # print(f"Left Trend: {s3_trend_L_Spindle} Right Trend: {s3_trend_R_Spindle}")
+                    if hand_count == 1 and spindle_count == 1 and s3_trend_R_Spindle == logic_tools.Trendline.INCREASING and s3_trend_L_Spindle == logic_tools.Trendline.DECREASING: 
+                        procedure[current_step].update_description(u'Passed it to Left Hand 🏀')
+                        sub_conditions[3] = True
+
+            # SUB 4 : passed to left hand 
+            if not sub_conditions[4] and sub_conditions[3] == True:
+                over_count = 0  
+
+                if num_class_detected > 1:
+                    over_count, over_det = logic_tools.find_overlapping(data)
+                    if over_count == 1:
+                        single_overlap_pair = over_det[0]
+                        # if the overlapping is between spindle and hand
+                        if ((single_overlap_pair[0][5] == 7 and single_overlap_pair[1][5] == 4) or 
+                        (single_overlap_pair[0][5] == 4 and single_overlap_pair[1][5] == 7)):
+                            procedure[current_step].update_description(u'Spindle on Left Hand😎')
+                            sub_conditions[4] = True
+                
+            # SUB 5 : leaving left hand
+            if not sub_conditions[5] and sub_conditions[4] == True:
+                s5_curr_dist_Spindle = -1
+
+                if num_class_detected > 1:
+                    hand_count, hands_det = logic_tools.find_hands(data)
+                    over_count, over_det = logic_tools.find_overlapping(data)
+                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
+                            
+                    if hand_count == 1 and spindle_count == 1:
+                        spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
+                        hand_center = logic_tools.get_box_center(*hands_det[0][:4])
+
+                        s5_curr_dist_Spindle = logic_tools.get_euclidean_distance(hand_center, spindle_center)
+                        
+                        # Spindle Leaving Right Hand 
+                        if s5_curr_dist_Spindle > s5_prev_dist_Spindle:
+                            s5_trend_Spindle = logic_tools.Trendline.INCREASING
+
+                        elif s5_curr_dist_Spindle < s5_prev_dist_Spindle:
+                            s5_trend_Spindle = logic_tools.Trendline.DECREASING
+                            
+                        s5_prev_dist_Spindle = s5_curr_dist_Spindle
+
+                
+                if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
+                    procedure[current_step].update_description(u'Spindle leave L-Hand 😭')
+                    sub_conditions[5] = True
+
+            # SUB 6 : no overlap spingle left behind
+            if not sub_conditions[6] and sub_conditions[5] == True:
+                spindle_count, spindle_det = logic_tools.find_class(data, 7)
+
+                if spindle_count == 1 and num_class_detected == 1:
+                    procedure[current_step].update_description(u'Sindle Alone 😴')
+                sub_conditions[6] = True
+
+            if all(sub_conditions):
+                print("Step 1 Done")
+                gui.mark_step_done(DONE)
+
+            # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
+        
+
+
+        sub_conditions= [False for i in range(7)]
+        while current_step == 1:
+            # procedure[current_step].update_status(IN_PROGRESS)
+            data = cv_queue.get()
+            num_class_detected = len(data)
+
+            # SUB 0 : is there a hand?
+            if not sub_conditions[0]:
+                hand_count, hands_det = logic_tools.find_hands(data)
+                if hand_count > 1:
+                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    sub_conditions[0] = True
+
+            # SUB 1 : is there a spindle?
+            if not sub_conditions[1] and sub_conditions[0] == True:
+                spingle_count, _ = logic_tools.find_class(data, 7)
+                if spindle_count == 1:
+                    procedure[current_step].update_description(u'Found Spindle')
+                    sub_conditions[1] = True
+
+            # SUB 2 : is there a double flat bottom bracket?
+            if not sub_conditions[2] and sub_conditions[1] == True:
+                bolt_count, _ = logic_tools.find_class(data, 8)
+                if bolt_count == 1:
+                    procedure[current_step].update_description(u'Found Double flat bottom bracket👍')
+                    sub_conditions[2] = True
+
+            # if spindle + bolt + hand overlap --> passed
+
+            # if spindle + bolt + hand location aroudn there in the middle = pass
+
+            # could add time duration for them
+
+            
+            if all(sub_conditions):
+                print("Step 2 Done")
+                gui.mark_step_done(DONE)
+                
+        sub_conditions= [False for i in range(7)]
+        while current_step == 3:
+            data = cv_queue.get()
+            num_class_detected = len(data)
+
+            # find hand
+
+            # find spindle/bottom bracket
+
+            # find wrench
+
+            # correct overlap increase/decrease
+
+            # correct wrench location or hand location
+
+            # time duration 
+
+
+            if all(sub_conditions):
+                print("Step 3 Done")
+                gui.mark_step_done(DONE)
+
+        sub_conditions= [False for i in range(7)]
+        while current_step == 4:
+            data = cv_queue.get()
+            num_class_detected = len(data)
+            
+            # find hand
+
+            # find crank arm
+        
+            # find correct overlap
+
+            # correct location
+
+
+            # time duration
+
+            # correct increase/decrease
+
+
+
+            if all(sub_conditions):
+                print("Step 4 Done")
+                gui.mark_step_done(DONE)
+
+        while current_step > 4:
+            time.sleep(10)
+            gui.mark_step_done(DONE)    
+
 
 class DisplayGUI:
     def __init__(self, app):
@@ -360,16 +632,47 @@ class DisplayGUI:
 
         # dummy steps
         # TODO: define steps & their individual criteria
-        for i in range(10):
-            if i < 2:
-                t = i
-            elif i == 2:
-                t = 2
-            else:
-                t = 3
-            s = Step(index=i + 1, title=f"Step  {i + 1}", description="[wrench type], [other relevant info]",
-                     status=list(colors.keys())[t])
+
+        for i in range(1, 8):
+            if i == 1:
+                title = f"Step {i}, Spindle IN!"
+                description = "Putting Spindle In!"
+                status = NOT_DONE
+
+            if i == 2:
+                title = f"Step {i}, Double Flat Bottom Bracket IN!"
+                description = "you got this."
+                status = NOT_DONE
+            
+            if i == 3:
+                title = f"Step {i}, Double Flat Wrench SPIN!"
+                description = "you got this."
+                status = NOT_DONE
+            
+            if i == 4:
+                title = f"Step {i}, Crank Arm IN!"
+                description = "you got this."
+                status = NOT_DONE
+
+            if i == 5:
+                title = f"Step {i}, Little Bolt! IN!"
+                description = "you got this."
+                status = NOT_DONE
+
+            if i == 6:
+                title = f"Step {i}, PEDALLLL IN!"
+                description = "you got this."
+                status = NOT_DONE
+
+            if i == 7:
+                title = f"Step {i}, Pedal Locking Wrench IN!"
+                description = "you got this."
+                status = NOT_DONE
+            
+            s = Step(i, title, description, status)
+
             procedure.append(s)
+
         return procedure
 
     def mark_step_done(self, done_type):
@@ -386,7 +689,7 @@ class DisplayGUI:
         if isLastStep: return
 
         current_step += 1
-        procedure[current_step - 1].update_status(IN_PROGRESS)
+        procedure[current_step - 1].update_status(IN_PROGRESS, isFocus=True)
 
     def override_mark_done(self, e):
         """
@@ -400,7 +703,7 @@ class DisplayGUI:
         if current_step == 1: return
         
         procedure[current_step - 2].update_status(IN_PROGRESS)
-        procedure[current_step - 1].update_status(NOT_DONE, isFocus=False)
+        procedure[current_step - 1].update_status(NOT_DONE)            
 
         self.canvas.yview_moveto(-1.0)
         
