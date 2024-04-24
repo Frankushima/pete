@@ -268,14 +268,16 @@ def decision_logic():
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
-                procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
-                sub_conditions[0] = True
+                if hand_count > 1:
+                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    sub_conditions[0] = True
 
             # SUB 1 : is there a spindle? (index = 7)
             if not sub_conditions[1] and sub_conditions[0] == True:
                 spindle_count, spindle_det = logic_tools.find_class(data, 7)
-                procedure[current_step].update_description(u'Found Spindle 👍')
-                sub_conditions[1] = True
+                if spindle_count == 1:
+                    procedure[current_step].update_description(u'Found Spindle 👍')
+                    sub_conditions[1] = True
             
             # SUB 2 : are they overlapped? hand holding spindle? 
             if not sub_conditions[2] and sub_conditions[1] == True:
@@ -391,10 +393,98 @@ def decision_logic():
                 sub_conditions[6] = True
 
             if all(sub_conditions):
-                print("everything done")
+                print("Step 1 Done")
                 gui.mark_step_done(DONE)
 
             # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
+
+
+
+        sub_conditions= [False for i in range(7)]
+        while current_step == 1:
+            # procedure[current_step].update_status(IN_PROGRESS)
+            data = cv_queue.get()
+            num_class_detected = len(data)
+
+            # SUB 0 : is there a hand?
+            if not sub_conditions[0]:
+                hand_count, hands_det = logic_tools.find_hands(data)
+                if hand_count > 1:
+                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    sub_conditions[0] = True
+
+            # SUB 1 : is there a spindle?
+            if not sub_conditions[1] and sub_conditions[0] == True:
+                spingle_count, _ = logic_tools.find_class(data, 7)
+                if spindle_count == 1:
+                    procedure[current_step].update_description(u'Found Spindle')
+                    sub_conditions[1] = True
+
+            # SUB 2 : is there a double flat bottom bracket?
+            if not sub_conditions[2] and sub_conditions[1] == True:
+                bolt_count, _ = logic_tools.find_class(data, 8)
+                if bolt_count == 1:
+                    procedure[current_step].update_description(u'Found Double flat bottom bracket👍')
+                    sub_conditions[2] = True
+
+            # if spindle + bolt + hand overlap --> passed
+
+            # if spindle + bolt + hand location aroudn there in the middle = pass
+
+            # could add time duration for them
+
+
+            if all(sub_conditions):
+                print("Step 2 Done")
+                gui.mark_step_done(DONE)
+
+        sub_conditions= [False for i in range(7)]
+        while current_step == 3:
+            data = cv_queue.get()
+            num_class_detected = len(data)
+
+            # find hand
+
+            # find spindle/bottom bracket
+
+            # find wrench
+
+            # correct overlap increase/decrease
+
+            # correct wrench location or hand location
+
+            # time duration
+
+
+            if all(sub_conditions):
+                print("Step 3 Done")
+                gui.mark_step_done(DONE)
+
+        sub_conditions= [False for i in range(7)]
+        while current_step == 4:
+            data = cv_queue.get()
+            num_class_detected = len(data)
+
+            # find hand
+
+            # find crank arm
+
+            # find correct overlap
+
+            # correct location
+
+
+            # time duration
+
+            # correct increase/decrease
+
+
+
+            if all(sub_conditions):
+                print("Step 4 Done")
+                gui.mark_step_done(DONE)
+
+        while current_step > 4:
 
         while current_step == 6:
             StepValidator.step7_validator()
