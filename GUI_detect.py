@@ -682,7 +682,7 @@ class DisplayGUI:
         """
         global current_step, procedure
 
-        isLastStep = current_step == len(procedure)
+        isLastStep = current_step == len(procedure) - 1
         procedure[current_step].update_status(done_type, isFocus=isLastStep)
 
         self.canvas.yview_moveto(1.0)
@@ -700,17 +700,20 @@ class DisplayGUI:
     def revert_mark_done(self,e):
         global current_step, procedure
 
-        if current_step == 0: return
+        if current_step == 0: return #check if first step
         
-        current_step -= 1
-
-        procedure[current_step].update_status(IN_PROGRESS)
-        procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)     
+        # allow for reverting last step
+        isLastStep = current_step == len(procedure) - 1
+        if isLastStep and (procedure[current_step].status == DONE or procedure[current_step].status == DONE_OV):
+            procedure[current_step].update_status(IN_PROGRESS)
+        else:
+            current_step -= 1
+            procedure[current_step].update_status(IN_PROGRESS)
+            procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)     
 
         self.canvas.yview_moveto(-1.0)
         
         
-    
     def set_frame(self, frame):
         """
         Updates detection preview on the left
