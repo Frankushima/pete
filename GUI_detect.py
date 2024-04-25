@@ -702,12 +702,14 @@ class DisplayGUI:
 
         if current_step == 0: return
         
-        procedure[current_step - 2].update_status(IN_PROGRESS)
-        procedure[current_step - 1].update_status(NOT_DONE)            
+        current_step -= 1
+
+        procedure[current_step].update_status(IN_PROGRESS)
+        procedure[current_step + 1].update_status(NOT_DONE)            
 
         self.canvas.yview_moveto(-1.0)
         
-        current_step -= 1
+        
     
     def set_frame(self, frame):
         """
