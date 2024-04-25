@@ -705,7 +705,7 @@ class DisplayGUI:
         current_step -= 1
 
         procedure[current_step].update_status(IN_PROGRESS)
-        procedure[current_step + 1].update_status(NOT_DONE)            
+        procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)     
 
         self.canvas.yview_moveto(-1.0)
         
