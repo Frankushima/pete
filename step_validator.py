@@ -91,7 +91,7 @@ def step7_validator(step_GUI):
 
         # init condition 2: bolt in crank arm
         bolt_crank_iou = bbox_iou(crank_arm[:4], bolt[:4])
-        if pedal_crank_iou < 0.8: continue
+        if bolt_crank_iou < 0.8: continue
 
         end_stage_satisfied = True
 
