@@ -113,4 +113,8 @@ class Step:
         return True
     
     def update_description(self, description):
-        self.description += f"\n {description} \n"
+        self.description += f"\n {description}"
+        self.info_frame['text'] = f"Status: {self.status}\nAdditional Info: {self.description}\n"
+
+    def debug_info(self):
+        print(f"Index: {self.index} Status: {self.status} Focus: {self.isFocus}")
