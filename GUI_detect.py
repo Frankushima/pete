@@ -261,7 +261,6 @@ def decision_logic():
         while current_step == 0:
             data = cv_queue.get()
             num_class_detected = len(data)
-            # procedure[current_step].debug_info()
             
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
@@ -398,7 +397,6 @@ def decision_logic():
         
         sub_conditions = [False for i in range(3)]
         while current_step == 1:
-            procedure[current_step].debug_info()
             data = cv_queue.get()
             num_class_detected = len(data)
             
@@ -406,21 +404,21 @@ def decision_logic():
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
                 if hand_count > 1:
-                    procedure[1].update_description(emoji.emojize("Found Hands 👍"))
+                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
                     sub_conditions[0] = True
 
             # SUB 1 : is there a spindle?
             if not sub_conditions[1] and sub_conditions[0] == True:
                 spingle_count, _ = logic_tools.find_class(data, 7)
                 if spindle_count == 1:
-                    procedure[1].update_description(u'Found Spindle')
+                    procedure[current_step].update_description(u'Found Spindle')
                     sub_conditions[1] = True
 
             # SUB 2 : is there a double flat bottom bracket?
             if not sub_conditions[2] and sub_conditions[1] == True:
                 bolt_count, _ = logic_tools.find_class(data, 8)
                 if bolt_count == 1:
-                    procedure[1].update_description(u'Found Double flat bottom bracket👍')
+                    procedure[current_step].update_description(u'Found Double flat bottom bracket👍')
                     sub_conditions[2] = True
 
             # if spindle + bolt + hand overlap --> passed
@@ -431,7 +429,7 @@ def decision_logic():
 
             
             if all(sub_conditions):
-                print("Step 2 Done")
+                # print("Step 2 Done")
                 gui.mark_step_done(DONE)
         
 
@@ -456,7 +454,7 @@ def decision_logic():
 
 
             if all(sub_conditions):
-                print("Step 3 Done")
+                # print("Step 3 Done")
                 gui.mark_step_done(DONE)
 
         sub_conditions= [False for i in range(1)]
@@ -481,7 +479,7 @@ def decision_logic():
             # correct increase/decrease
 
             if all(sub_conditions):
-                print("Step 4 Done")
+                # print("Step 4 Done")
                 gui.mark_step_done(DONE)
 
         while current_step >= 4:
