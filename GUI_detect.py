@@ -8,7 +8,7 @@ import torch.backends.cudnn as cudnn
 from numpy import random
 import numpy as np
 
-import StepValidator
+import step_validator
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
@@ -218,6 +218,9 @@ def detect(save_img=False):
     print(f'Done. ({time.time() - t0:.3f}s)')
 
 
+def get_data():
+    return cv_queue.get()
+
 def decision_logic():
     global procedure, current_step, gui, cv_queue
     while True:  # prevent calling before initialization
@@ -262,6 +265,7 @@ def decision_logic():
         while current_step == 0:
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
+            print(f"[Step {current_step}] data:", data)
 
             num_class_detected = len(data)
 
@@ -477,7 +481,7 @@ def decision_logic():
                 gui.mark_step_done(DONE)
 
         while current_step == 6:
-            StepValidator.step7_validator()
+            step_validator.step7_validator(procedure[current_step])
 
         while current_step > 4 and current_step != 6:
             print(f"In Step {current_step} Now")
@@ -778,10 +782,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # parser.add_argument('--weights', nargs='+', type=str, default='VAR_B40E40_Transfer_Fine-Tune_0-0001.pt', help='model.pt path(s)')
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstallBad1.MOV',
+    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstall.MOV',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
-    parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
+    parser.add_argument('--conf-thres', type=float, default=0.4, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--view-img', default='True', action='store_true', help='display results')

@@ -38,3 +38,19 @@ override_button_color = "#932323"
 revert_button_color = '#0B6623'
 live_stream_url = "https://api.ucsb.edu/dining/cams/v2/stream/carrillo?ucsb-api-key=0AVpBy0HfloWaEQHPanHTGSYmXusaNIJ"
 # live_stream_url = "http://d3rlna7iyyu8wu.cloudfront.net/DolbyVision_Atmos/profile8.1_DASH/p8.1.mpd"
+
+
+# Class Names
+ADJUSTABLE_MONKEY_WRENCH = 0
+MONKEY_WRENCH = 1
+ALLEN_KEY = 2
+DOUBLE_FLATS_WRENCH = 3
+HAND = 4
+PEDAL_LOCKRING_WRENCH = 5
+CRANK_REMOVER = 6
+SPINDLE = 7
+DOUBLEFLATS_BOTTOM_BRACKET = 8
+CRANK_ARM_NON_CHAINSIDE = 9
+BOLT = 10
+PEDAL = 11
+CRANK_ARM = 12
