@@ -230,8 +230,6 @@ def decision_logic():
     
         :param data: a dict of CV data (bounding boxes) and sensor data. Or, evoke methods in main to get these data.
         """
-
-        
         # data['CV'] = blah blah
         # data['sensor'] = blob blob
         # data['lala'] = wawa
@@ -244,7 +242,9 @@ def decision_logic():
         # Each step has its own validate function however, the class itself cannot modify the validate function
         # the validate method willb e implemented here hardcoded (at least for now...)
 
-        
+        # initialize make step 1 to IN_PROGRESS
+        procedure[current_step].update_status(IN_PROGRESS)
+
         # variables for trendline, must be initalize outside of steps
         # Sub3
         s3_prev_dist_R_Spindle = -math.inf
@@ -259,7 +259,6 @@ def decision_logic():
 
         sub_conditions= [False for i in range(7)]
         while current_step == 0:
-            procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
             num_class_detected = len(data)
             
@@ -387,7 +386,7 @@ def decision_logic():
                 spindle_count, spindle_det = logic_tools.find_class(data, 7)
 
                 if spindle_count == 1 and num_class_detected == 1:
-                    procedure[current_step].update_description(u'Sindle Alone 😴')
+                    procedure[current_step].update_description(u'Spindle Alone 😴')
                 sub_conditions[6] = True
 
             if all(sub_conditions):
@@ -396,14 +395,11 @@ def decision_logic():
 
             # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
         
-
-
-        sub_conditions= [False for i in range(7)]
+        sub_conditions = [False for i in range(3)]
         while current_step == 1:
-            # procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
             num_class_detected = len(data)
-
+            
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
@@ -433,16 +429,19 @@ def decision_logic():
 
             
             if all(sub_conditions):
-                print("Step 2 Done")
+                # print("Step 2 Done")
                 gui.mark_step_done(DONE)
-                
-        sub_conditions= [False for i in range(7)]
-        while current_step == 3:
+        
+
+        sub_conditions= [False for i in range(1)]
+        while current_step == 2:
             data = cv_queue.get()
             num_class_detected = len(data)
-
+            
             # find hand
-
+            if not sub_conditions[0]:
+                time.sleep(3)
+                sub_conditions[0] = True
             # find spindle/bottom bracket
 
             # find wrench
@@ -455,15 +454,18 @@ def decision_logic():
 
 
             if all(sub_conditions):
-                print("Step 3 Done")
+                # print("Step 3 Done")
                 gui.mark_step_done(DONE)
 
-        sub_conditions= [False for i in range(7)]
-        while current_step == 4:
+        sub_conditions= [False for i in range(1)]
+        while current_step == 3:
             data = cv_queue.get()
             num_class_detected = len(data)
             
             # find hand
+            if not sub_conditions[0]:
+                time.sleep(5)
+                sub_conditions[0] = True
 
             # find crank arm
         
@@ -476,14 +478,12 @@ def decision_logic():
 
             # correct increase/decrease
 
-
-
             if all(sub_conditions):
-                print("Step 4 Done")
+                # print("Step 4 Done")
                 gui.mark_step_done(DONE)
 
-        while current_step > 4:
-            time.sleep(10)
+        while current_step >= 4:
+            time.sleep(5)
             gui.mark_step_done(DONE)    
 
 
@@ -633,39 +633,39 @@ class DisplayGUI:
         # dummy steps
         # TODO: define steps & their individual criteria
 
-        for i in range(1, 8):
-            if i == 1:
-                title = f"Step {i}, Spindle IN!"
+        for i in range(0, 7):
+            if i == 0:
+                title = f"Step {i+1}, Spindle IN!"
                 description = "Putting Spindle In!"
                 status = NOT_DONE
 
+            if i == 1:
+                title = f"Step {i+1}, Double Flat Bottom Bracket IN!"
+                description = "you got this."
+                status = NOT_DONE
+            
             if i == 2:
-                title = f"Step {i}, Double Flat Bottom Bracket IN!"
+                title = f"Step {i+1}, Double Flat Wrench SPIN!"
                 description = "you got this."
                 status = NOT_DONE
             
             if i == 3:
-                title = f"Step {i}, Double Flat Wrench SPIN!"
+                title = f"Step {i+1}, Crank Arm IN!"
                 description = "you got this."
                 status = NOT_DONE
-            
+
             if i == 4:
-                title = f"Step {i}, Crank Arm IN!"
+                title = f"Step {i+1}, Little Bolt! IN!"
                 description = "you got this."
                 status = NOT_DONE
 
             if i == 5:
-                title = f"Step {i}, Little Bolt! IN!"
+                title = f"Step {i+1}, PEDALLLL IN!"
                 description = "you got this."
                 status = NOT_DONE
 
             if i == 6:
-                title = f"Step {i}, PEDALLLL IN!"
-                description = "you got this."
-                status = NOT_DONE
-
-            if i == 7:
-                title = f"Step {i}, Pedal Locking Wrench IN!"
+                title = f"Step {i+1}, Pedal Locking Wrench IN!"
                 description = "you got this."
                 status = NOT_DONE
             
@@ -682,14 +682,14 @@ class DisplayGUI:
         """
         global current_step, procedure
 
-        isLastStep = current_step == len(procedure)
-        procedure[current_step - 1].update_status(done_type, isFocus=isLastStep)
+        isLastStep = current_step == len(procedure) - 1
+        procedure[current_step].update_status(done_type, isFocus=isLastStep)
 
         self.canvas.yview_moveto(1.0)
         if isLastStep: return
 
         current_step += 1
-        procedure[current_step - 1].update_status(IN_PROGRESS, isFocus=True)
+        procedure[current_step].update_status(IN_PROGRESS, isFocus=True)
 
     def override_mark_done(self, e):
         """
@@ -700,15 +700,20 @@ class DisplayGUI:
     def revert_mark_done(self,e):
         global current_step, procedure
 
-        if current_step == 1: return
+        if current_step == 0: return #check if first step
         
-        procedure[current_step - 2].update_status(IN_PROGRESS)
-        procedure[current_step - 1].update_status(NOT_DONE)            
+        # allow for reverting last step
+        isLastStep = current_step == len(procedure) - 1
+        if isLastStep and (procedure[current_step].status == DONE or procedure[current_step].status == DONE_OV):
+            procedure[current_step].update_status(IN_PROGRESS)
+        else:
+            current_step -= 1
+            procedure[current_step].update_status(IN_PROGRESS)
+            procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)     
 
         self.canvas.yview_moveto(-1.0)
         
-        current_step -= 1
-    
+        
     def set_frame(self, frame):
         """
         Updates detection preview on the left
