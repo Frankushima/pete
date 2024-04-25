@@ -635,37 +635,37 @@ class DisplayGUI:
 
         for i in range(0, 7):
             if i == 0:
-                title = f"Step {i}, Spindle IN!"
+                title = f"Step {i+1}, Spindle IN!"
                 description = "Putting Spindle In!"
                 status = NOT_DONE
 
             if i == 1:
-                title = f"Step {i}, Double Flat Bottom Bracket IN!"
+                title = f"Step {i+1}, Double Flat Bottom Bracket IN!"
                 description = "you got this."
                 status = NOT_DONE
             
             if i == 2:
-                title = f"Step {i}, Double Flat Wrench SPIN!"
+                title = f"Step {i+1}, Double Flat Wrench SPIN!"
                 description = "you got this."
                 status = NOT_DONE
             
             if i == 3:
-                title = f"Step {i}, Crank Arm IN!"
+                title = f"Step {i+1}, Crank Arm IN!"
                 description = "you got this."
                 status = NOT_DONE
 
             if i == 4:
-                title = f"Step {i}, Little Bolt! IN!"
+                title = f"Step {i+1}, Little Bolt! IN!"
                 description = "you got this."
                 status = NOT_DONE
 
             if i == 5:
-                title = f"Step {i}, PEDALLLL IN!"
+                title = f"Step {i+1}, PEDALLLL IN!"
                 description = "you got this."
                 status = NOT_DONE
 
             if i == 6:
-                title = f"Step {i}, Pedal Locking Wrench IN!"
+                title = f"Step {i+1}, Pedal Locking Wrench IN!"
                 description = "you got this."
                 status = NOT_DONE
             
