@@ -14,6 +14,8 @@ def step7_validator(step_GUI):
         - crank arm
         - pedal
         - bolt
+    TODO:   1) does logic stop when override/revert button is clicked?
+            2) check for null in detection [0]
     """
 
     # a lil timer
@@ -39,34 +41,55 @@ def step7_validator(step_GUI):
         bolt = data[data[:, 5] == BOLT][0]
 
         # init condition 1: pedal in prox of crank arm;
+        # TODO: 'proximity' might not be strict enough? (proximity + edge of crank arm?)
         pedal_crank_iou = bbox_iou(crank_arm[:4], pedal[:4])
         if pedal_crank_iou < 0.1: continue
 
         # init condition 2: bolt in crank arm
+        # TODO: 'proximity' --> proximity + edge of crank arm (?)
         bolt_crank_iou = bbox_iou(crank_arm[:4], bolt[:4])
-        if pedal_crank_iou < 0.8: continue
+        if bolt_crank_iou < 0.8: continue
 
         initial_stage_satisfied = True
 
     # adding some info to step display.
-    # TODO: make this prettier or something idk
-    step_GUI.update_description("Initial condition satisfied.")
+    step_GUI.update_description("Initial conditions satisfied.")
 
     """
     B) In-progress conditions to be satisfied:
         1. hand intersecting greatly with pedal wrench (for the duration of rotation being sensed/detected)
-            - as long as pedal wrench+hand combination is engaged with pedal, this sub step is active 
+            - this sub step is active as long as pedal wrench+hand combination is engaged with pedal
             - rotation in bbox can be very roughly sort-of-ish detected using the center of the bbox; 
                 but the rotation is not a smooth circle/ellipse
+        2. ?
     Concerns:
-        - losing visual (use EWMA on 4 point of bbox to approximate expected location until next update?)
+        - losing visual (use EWMA on 4 point of bbox to approximate expected location until next update? -- tracking???)
             - use last location? But what if obj is hidden for a long time? 
                 (& differentiate between removed from frame vs hidden) 
     """
     in_progress_stage_satisfied = False
+    num_rotations = 0
     while not in_progress_stage_satisfied:
         data = np.array(GUI_detect.get_data())  # [[xyxy(4), conf(1), class(1)], ...]
-        # (?) needs some sort of persistent tracking here to detect rotation over time
+        pedal = data[data[:, 5] == PEDAL][0]
+        hands = data[data[:, 5] == HAND]
+        pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
+        # (?) needs some sort of persistent tracking here to detect rotation over time (hardcode to minimum 3 rotations?)
+        if "projects to continue rotation, whatever that means in code":
+            pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
+            # takes max to determine most likely hand holding wrench (???)
+            hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
+
+            if "is another rotation":
+                num_rotations += 1
+
+            if not (pedal_pedal_lockring_iou > 0.2 and hand_pedal_lockring_iou > 0.5 and num_rotations == 3):
+                continue
+
+            in_progress_stage_satisfied = True
+
+
+    step_GUI.update_description("Substeps conditions satisfied.")
 
     """
     C) End-stage conditions:
@@ -85,15 +108,18 @@ def step7_validator(step_GUI):
         crank_arm = data[data[:, 5] == CRANK_ARM][0]
         bolt = data[data[:, 5] == BOLT][0]
 
-        # init condition 1: pedal in prox of crank arm;
+        # end condition 1: pedal in prox of crank arm;
+        # TODO: 'proximity' might not be strict enough? (proximity + edge of crank arm?)
         pedal_crank_iou = bbox_iou(crank_arm[:4], pedal[:4])
         if pedal_crank_iou < 0.1: continue
 
-        # init condition 2: bolt in crank arm
+        # end condition 2: bolt in crank arm
+        # TODO: 'proximity' --> proximity + edge of crank arm (?)
         bolt_crank_iou = bbox_iou(crank_arm[:4], bolt[:4])
         if bolt_crank_iou < 0.8: continue
 
         end_stage_satisfied = True
+    step_GUI.update_description("End stage conditions satisfied.")
 
     return start_time - time.time()
 

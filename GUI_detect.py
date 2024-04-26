@@ -221,6 +221,7 @@ def detect(save_img=False):
 def get_data():
     return cv_queue.get()
 
+
 def decision_logic():
     global procedure, current_step, gui, cv_queue
     while True:  # prevent calling before initialization
@@ -265,7 +266,7 @@ def decision_logic():
         while current_step == 0:
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
-            print(f"[Step {current_step}] data:", data)
+            # print(f"[Step {current_step}] data:", data)
 
             num_class_detected = len(data)
 
@@ -400,8 +401,7 @@ def decision_logic():
                 gui.mark_step_done(DONE)
 
             # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
-
-        sub_conditions = [False for i in range(7)]
+        sub_conditions = [True for i in range(7)]
         while current_step == 1:
             # procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
@@ -416,7 +416,7 @@ def decision_logic():
 
             # SUB 1 : is there a spindle?
             if not sub_conditions[1] and sub_conditions[0] == True:
-                spingle_count, _ = logic_tools.find_class(data, 7)
+                spindle_count, _ = logic_tools.find_class(data, 7)
                 if spindle_count == 1:
                     procedure[current_step].update_description(u'Found Spindle')
                     sub_conditions[1] = True
@@ -438,8 +438,8 @@ def decision_logic():
                 print("Step 2 Done")
                 gui.mark_step_done(DONE)
 
-        sub_conditions = [False for i in range(7)]
-        while current_step == 3:
+        sub_conditions = [True for i in range(7)]
+        while current_step == 2:
             data = cv_queue.get()
             num_class_detected = len(data)
 
@@ -459,8 +459,8 @@ def decision_logic():
                 print("Step 3 Done")
                 gui.mark_step_done(DONE)
 
-        sub_conditions = [False for i in range(7)]
-        while current_step == 4:
+        sub_conditions = [True for i in range(7)]
+        while current_step == 3:
             data = cv_queue.get()
             num_class_detected = len(data)
 
@@ -480,13 +480,16 @@ def decision_logic():
                 print("Step 4 Done")
                 gui.mark_step_done(DONE)
 
-        while current_step == 6:
-            step_validator.step7_validator(procedure[current_step])
-
-        while current_step > 4 and current_step != 6:
+        while current_step != 6:
             print(f"In Step {current_step} Now")
             time.sleep(10)
             gui.mark_step_done(DONE)
+
+        while current_step == 6:
+            print(f"entering expected step 6. Actual var value = {current_step}")
+            step_validator.step7_validator(procedure[current_step])
+
+
 
 
 class DisplayGUI:
@@ -600,8 +603,10 @@ class DisplayGUI:
         procedure = self.get_procedure()
         # initialize lists in GUI
         for step in procedure:
-            if step.status == IN_PROGRESS: current_step = step.index
+            if step.status == IN_PROGRESS: current_step = step.index - 1
+            print(f"initial step = {current_step}")
             step.build(self.procedure_list)
+        print(f"GUI display of step {current_step} = {procedure[current_step].index}")
 
         self.procedure_list.pack(side="right", fill="both",
                                  expand=True)  # pack after resizing ensures procedure list is correct size
@@ -639,11 +644,11 @@ class DisplayGUI:
         # dummy steps
         # TODO: define steps & their individual criteria
 
-        for i in range(1, 8):
+        for i in range(1,8):
             if i == 1:
                 title = f"Step {i}, Spindle IN!"
                 description = "Putting Spindle In!"
-                status = NOT_DONE
+                status = IN_PROGRESS
 
             if i == 2:
                 title = f"Step {i}, Double Flat Bottom Bracket IN!"
@@ -685,17 +690,19 @@ class DisplayGUI:
         """
         Mark step as done and go to next step (if exists)
         :param done_type: DONE_OV (overriden), DONE (regular auto-approved)
+        current_step is 0-indexed
+        procedure is 0-indexed
         """
         global current_step, procedure
 
-        isLastStep = current_step == len(procedure)
-        procedure[current_step - 1].update_status(done_type, isFocus=isLastStep)
+        isLastStep = current_step == len(procedure) - 1
+        procedure[current_step].update_status(done_type, isFocus=isLastStep)
 
         self.canvas.yview_moveto(1.0)
         if isLastStep: return
 
         current_step += 1
-        procedure[current_step - 1].update_status(IN_PROGRESS, isFocus=True)
+        procedure[current_step].update_status(IN_PROGRESS, isFocus=True)
 
     def override_mark_done(self, e):
         """
