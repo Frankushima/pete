@@ -113,4 +113,12 @@ class Step:
         return True
     
     def update_description(self, description):
-        self.description += f"\n {description} \n"
+        # HACK: do not update description if its already been added (may need to change if we have duplicate substeps)
+        if description in self.description:
+            return
+        
+        self.description += f"\n {description}"
+        self.info_frame['text'] = f"Status: {self.status}\nAdditional Info: {self.description}\n"
+
+    def debug_info(self):
+        print(f"Index: {self.index} Status: {self.status} Focus: {self.isFocus}")
