@@ -243,13 +243,16 @@ def decision_logic():
         # TESTING ONLY: always validate to true after 10 seconds (lol)
         # if procedure[current_step].validate(data):
         #     gui.mark_step_done(DONE)
-
+        
         # Currently validate function will not be used because of the code structure
         # Each step has its own validate function however, the class itself cannot modify the validate function
         # the validate method willb e implemented here hardcoded (at least for now...)
 
         # initialize make step 1 to IN_PROGRESS
         procedure[current_step].update_status(IN_PROGRESS)
+
+        # build substeps for step 1
+        gui.build_substeps(procedure[current_step])
 
         # variables for trendline, must be initalize outside of steps
         # Sub3
@@ -266,22 +269,22 @@ def decision_logic():
         sub_conditions= [False for i in range(7)]
         while current_step == 0:
             data = cv_queue.get()
-            # print(f"[Step {current_step}] data:", data)
-
             num_class_detected = len(data)
             
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
                 if hand_count > 1:
-                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    gui.update_substep(0)
                     sub_conditions[0] = True
 
             # SUB 1 : is there a spindle? (index = 7)
             if not sub_conditions[1] and sub_conditions[0] == True:
                 spindle_count, spindle_det = logic_tools.find_class(data, 7)
                 if spindle_count == 1:
-                    procedure[current_step].update_description(u'Found Spindle 👍')
+                    # procedure[current_step].update_description(u'Found Spindle 👍')
+                    gui.update_substep(1)
                     sub_conditions[1] = True
             
             # SUB 2 : are they overlapped? hand holding spindle? 
@@ -295,7 +298,8 @@ def decision_logic():
                         # if the overlapping is between spindle and hand
                         if ((single_overlap_pair[0][5] == 7 and single_overlap_pair[1][5] == 4) or 
                         (single_overlap_pair[0][5] == 4 and single_overlap_pair[1][5] == 7)):
-                            procedure[current_step].update_description(u'Hand holding Spindle 👍')
+                            # procedure[current_step].update_description(u'Hand holding Spindle 👍')
+                            gui.update_substep(2)
                             sub_conditions[2] = True
 
             # SUB 3 : leaving right hand + increasing left hand
@@ -343,7 +347,8 @@ def decision_logic():
 
                         # print(f"Left Trend: {s3_trend_L_Spindle} Right Trend: {s3_trend_R_Spindle}")
                     if hand_count == 1 and spindle_count == 1 and s3_trend_R_Spindle == logic_tools.Trendline.INCREASING and s3_trend_L_Spindle == logic_tools.Trendline.DECREASING: 
-                        procedure[current_step].update_description(u'Passed it to Left Hand 🏀')
+                        # procedure[current_step].update_description(u'Passed it to Left Hand 🏀')
+                        gui.update_substep(3)
                         sub_conditions[3] = True
 
             # SUB 4 : passed to left hand 
@@ -357,7 +362,8 @@ def decision_logic():
                         # if the overlapping is between spindle and hand
                         if ((single_overlap_pair[0][5] == 7 and single_overlap_pair[1][5] == 4) or 
                         (single_overlap_pair[0][5] == 4 and single_overlap_pair[1][5] == 7)):
-                            procedure[current_step].update_description(u'Spindle on Left Hand😎')
+                            # procedure[current_step].update_description(u'Spindle on Left Hand😎')
+                            gui.update_substep(4)
                             sub_conditions[4] = True
                 
             # SUB 5 : leaving left hand
@@ -386,7 +392,8 @@ def decision_logic():
 
                 
                 if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
-                    procedure[current_step].update_description(u'Spindle leave L-Hand 😭')
+                    # procedure[current_step].update_description(u'Spindle leave L-Hand 😭')
+                    gui.update_substep(5)
                     sub_conditions[5] = True
 
             # SUB 6 : no overlap spingle left behind
@@ -394,8 +401,9 @@ def decision_logic():
                 spindle_count, spindle_det = logic_tools.find_class(data, 7)
 
                 if spindle_count == 1 and num_class_detected == 1:
-                    procedure[current_step].update_description(u'Sindle Alone 😴')
-                sub_conditions[6] = True
+                    # procedure[current_step].update_description(u'Spindle Alone 😴')
+                    gui.update_substep(6)
+                    sub_conditions[6] = True
 
             if all(sub_conditions):
                 print("Step 1 Done")
@@ -407,26 +415,29 @@ def decision_logic():
         while current_step == 1:
             data = cv_queue.get()
             num_class_detected = len(data)
-
+            
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
                 if hand_count > 1:
-                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    gui.update_substep(0)
                     sub_conditions[0] = True
 
             # SUB 1 : is there a spindle?
             if not sub_conditions[1] and sub_conditions[0] == True:
                 spindle_count, _ = logic_tools.find_class(data, 7)
                 if spindle_count == 1:
-                    procedure[current_step].update_description(u'Found Spindle')
+                    # procedure[current_step].update_description(u'Found Spindle')
+                    gui.update_substep(1)
                     sub_conditions[1] = True
 
             # SUB 2 : is there a double flat bottom bracket?
             if not sub_conditions[2] and sub_conditions[1] == True:
                 bolt_count, _ = logic_tools.find_class(data, 8)
                 if bolt_count == 1:
-                    procedure[current_step].update_description(u'Found Double flat bottom bracket👍')
+                    # procedure[current_step].update_description(u'Found Double flat bottom bracket👍')
+                    gui.update_substep(2)
                     sub_conditions[2] = True
 
             # if spindle + bolt + hand overlap --> passed
@@ -437,15 +448,15 @@ def decision_logic():
 
             
             if all(sub_conditions):
-                print("Step 2 Done")
+                # print("Step 2 Done")
                 gui.mark_step_done(DONE)
-
+        
 
         sub_conditions= [False for i in range(1)]
         while current_step == 2:
             data = cv_queue.get()
             num_class_detected = len(data)
-
+            
             # find hand
             if not sub_conditions[0]:
                 time.sleep(3)
@@ -462,7 +473,7 @@ def decision_logic():
 
 
             if all(sub_conditions):
-                print("Step 3 Done")
+                # print("Step 3 Done")
                 gui.mark_step_done(DONE)
 
         sub_conditions= [False for i in range(1)]
@@ -493,7 +504,7 @@ def decision_logic():
         while current_step >= 4 and current_step != 6:
             print(f"In Step {current_step} Now")
             time.sleep(5)
-            gui.mark_step_done(DONE)
+            gui.mark_step_done(DONE)    
 
         while current_step == 6:
             print(f"entering expected step 6. Actual var value = {current_step}")
@@ -582,12 +593,15 @@ class DisplayGUI:
         runtime_thread.daemon = True
         runtime_thread.start()
 
-        # Data
-        self.data = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
-        self.data.pack(side="left", fill="both", expand=True)
-        self.data_header = tk.Label(self.data, text="Data", bg=dark_theme_background, anchor='w',
+        # Substep Progress
+        self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
+        self.substep.pack(side="left", fill="both", expand=True)
+        self.substep_header = tk.Label(self.substep, text="Substep Progress", bg=dark_theme_background, anchor='w',
                                     justify="left", font=("Arial", 24, 'bold'))
-        self.data_header.pack(pady=(10, 0))
+        self.substep_header.pack(pady=(10, 0))
+
+        # list of Tkinter labels for substeps
+        self.substep_list = []
 
         # Procedure List ===================================================
         # Create a frame for the steps list (30% of total width)
@@ -653,38 +667,53 @@ class DisplayGUI:
                 title = f"Step {i+1}, Spindle IN!"
                 description = "Putting Spindle In!"
                 status = NOT_DONE
+                substeps = ['1.1 - Detect Hands',
+                            '1.2 - Detect Spindle',
+                            '1.3 - Hand holding Spindle',
+                            '1.4 - Passed to Left Hand',
+                            '1.5 - Spindle on Left Hand',
+                            '1.6 - Spindle leaves Left Hand',
+                            '1.7 - Spindle Alone']
 
             if i == 1:
                 title = f"Step {i+1}, Double Flat Bottom Bracket IN!"
                 description = "you got this."
                 status = NOT_DONE
+                substeps = ['2.1 - Detect Hands',
+                            '2.2 - Detect Spindle',
+                            '2.3 - Detect double flat bottom bracket']
 
             if i == 2:
                 title = f"Step {i+1}, Double Flat Wrench SPIN!"
                 description = "you got this."
                 status = NOT_DONE
-            
+                substeps = []
+
             if i == 3:
                 title = f"Step {i+1}, Crank Arm IN!"
                 description = "you got this."
                 status = NOT_DONE
-            
+                substeps = []
+
             if i == 4:
                 title = f"Step {i+1}, Little Bolt! IN!"
                 description = "you got this."
                 status = NOT_DONE
+                substeps = []
 
             if i == 5:
                 title = f"Step {i+1}, PEDALLLL IN!"
                 description = "you got this."
                 status = NOT_DONE
+                substeps = []
 
             if i == 6:
-                title = f"Step {i+1}, Use [Pedal Lockring Wrench] to install pedal"
-                description = "Yes."
+                title = f"Step {i+1}, Pedal Locking Wrench IN!"
+                description = "you got this."
                 status = NOT_DONE
-            
-            s = Step(i, title, description, status)
+                substeps = []
+
+            s = Step(i, title, description, status, substeps)
 
             procedure.append(s)
 
@@ -705,8 +734,10 @@ class DisplayGUI:
         self.canvas.yview_moveto(1.0)
         if isLastStep: return
 
+        self.clear_substeps()
         current_step += 1
         procedure[current_step].update_status(IN_PROGRESS, isFocus=True)
+        self.build_substeps(procedure[current_step])
 
     def override_mark_done(self, e):
         """
@@ -718,19 +749,20 @@ class DisplayGUI:
         global current_step, procedure
 
         if current_step == 0: return #check if first step
-
+        
         # allow for reverting last step
+        self.clear_substeps()
         isLastStep = current_step == len(procedure) - 1
         if isLastStep and (procedure[current_step].status == DONE or procedure[current_step].status == DONE_OV):
             procedure[current_step].update_status(IN_PROGRESS)
         else:
             current_step -= 1
             procedure[current_step].update_status(IN_PROGRESS)
-            procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)
-
+            procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)     
+        self.build_substeps(procedure[current_step])
         self.canvas.yview_moveto(-1.0)
         
-
+        
     def set_frame(self, frame):
         """
         Updates detection preview on the left
@@ -740,6 +772,21 @@ class DisplayGUI:
         photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
         self.livestream.config(image=photo)
         self.livestream.image = photo
+
+    def build_substeps(self, step):
+        for i,s in enumerate(step.substeps):
+            temp = tk.Label(self.substep, bg=dark_theme_background, text=s, anchor='w')
+            temp.pack()
+            self.substep_list.append(temp)
+
+    def update_substep(self, index):
+        self.substep_list[index]['fg'] = substep_complete_text_color
+        self.substep_list[index]['text'] += " \u2713 "
+
+    def clear_substeps(self):
+        for _ in range(len(self.substep_list)):
+            temp = self.substep_list.pop()
+            temp.destroy()
 
     def _check_loaded_model(self):
         """
