@@ -217,9 +217,11 @@ def detect(save_img=False):
     print(f'Done. ({time.time() - t0:.3f}s)')
 
 
-def get_data():
+def get_cv_data():
     return cv_queue.get()
 
+def sensor_detect():
+    return True
 
 def decision_logic():
     global procedure, current_step, gui, cv_queue

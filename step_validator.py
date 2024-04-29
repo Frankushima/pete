@@ -32,7 +32,7 @@ def step7_validator(step_GUI):
 
     initial_stage_satisfied = False
     while not initial_stage_satisfied:
-        data = np.array(GUI_detect.get_data())  # [[xyxy(4), conf(1), class(1)], ...]
+        data = np.array(GUI_detect.get_cv_data())  # [[xyxy(4), conf(1), class(1)], ...]
 
         #  Taking the first of each class of interest found.
         #  TODO: don't just take the first lol
@@ -70,7 +70,7 @@ def step7_validator(step_GUI):
     in_progress_stage_satisfied = False
     num_rotations = 0
     while not in_progress_stage_satisfied:
-        data = np.array(GUI_detect.get_data())  # [[xyxy(4), conf(1), class(1)], ...]
+        data = np.array(GUI_detect.get_cv_data())  # [[xyxy(4), conf(1), class(1)], ...]
         pedal = data[data[:, 5] == PEDAL][0]
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
@@ -88,7 +88,6 @@ def step7_validator(step_GUI):
 
             in_progress_stage_satisfied = True
 
-
     step_GUI.update_description("Substeps conditions satisfied.")
 
     """
@@ -100,7 +99,7 @@ def step7_validator(step_GUI):
     """
     end_stage_satisfied = False
     while not end_stage_satisfied:
-        data = np.array(GUI_detect.get_data())  # [[xyxy(4), conf(1), class(1)], ...]
+        data = np.array(GUI_detect.get_cv_data())  # [[xyxy(4), conf(1), class(1)], ...]
 
         #  Taking the first of each class of interest found.
         #  TODO: (like initial) don't just take the first
@@ -122,4 +121,3 @@ def step7_validator(step_GUI):
     step_GUI.update_description("End stage conditions satisfied.")
 
     return start_time - time.time()
-
