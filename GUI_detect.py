@@ -8,6 +8,7 @@ import torch.backends.cudnn as cudnn
 from numpy import random
 import numpy as np
 
+import logic_tools
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
@@ -23,7 +24,7 @@ from shared import *
 from Step import Step
 from PIL import Image, ImageTk
 
-import logic_tools
+from logic_tools import *
 import queue
 import math
 import emoji
@@ -510,16 +511,18 @@ def decision_logic():
             time.sleep(5)
             gui.mark_step_done(DONE)
 
-        while current_step == 6:
+        finished = False
+        while current_step == 6 and not finished:
             print(f"In Step {current_step + 1} Now")
-            step_runtime = step7_validator(procedure[current_step])
-            print(f"Step 7 runtime={step_runtime}")
+            step_runtime = step7_validator()
+            print(f"Step 7 runtime={step_runtime} secs")
             gui.mark_step_done(DONE)
+            finished = True
 
 
 # ===================== Step Logics ============================
 
-def step7_validator(step_GUI):
+def step7_validator():
     """
     StepValidator for step 7: using pedal lockring wrench to install pedal
     objects of interest in view:
@@ -546,6 +549,7 @@ def step7_validator(step_GUI):
     """
 
     initial_stage_satisfied = False
+    condition_persistor = Persistor(frames=30)
     while not initial_stage_satisfied:
         t1 = time.time()
         """
@@ -556,7 +560,8 @@ def step7_validator(step_GUI):
         # print(f"These are not the droids you're looking for.")
 
         # if necessary objs do not exist (caveat: glitch/hidden for brief moment)
-        if len(data[data[:, 5] == PEDAL]) == 0 or len(data[data[:, 5] == CRANK_ARM]) == 0 or len(data[data[:, 5] == BOLT]) == 0:
+        if len(data[data[:, 5] == PEDAL]) == 0 or len(data[data[:, 5] == CRANK_ARM]) == 0 or len(
+                data[data[:, 5] == BOLT]) == 0:
             continue
 
         #  Taking the first of each class of interest found.
@@ -566,18 +571,22 @@ def step7_validator(step_GUI):
 
         # init condition 1: pedal in prox of crank arm;
         pedal_crank_iou = bbox_iou(crank_arm[:4], pedal[:4])
-        print(f"pedal_crank_iou={pedal_crank_iou}")
-        if pedal_crank_iou < 0.1: continue
-
-        # init condition 2: bolt in crank arm
         bolt_crank_iou = bbox_iou(crank_arm[:4], bolt[:4])
-        print(f"bolt_crank_iou={bolt_crank_iou}")
-        if bolt_crank_iou < 0.8: continue
+        # print(f"crank_arm={crank_arm}, pedal={pedal}, bolt={bolt}")
+        # print(f"bolt_crank={bbox_intersection(bolt, crank_arm)}/{bbox_area(bolt)}")
+        # print(f"pedal_crank={pedal_crank_iou}\n")
 
-        initial_stage_satisfied = True
-        print(f"{time.time() - t1}")
+        if pedal_crank_iou < 0.08 or pedal_crank_iou > 0.2 or bbox_intersection(bolt, crank_arm) + 0.001 < bbox_area(bolt):
+            condition_persistor.disrupt()
+            continue
 
-    step_GUI.update_substep(0)  # substep 1 satisfied
+        if condition_persistor.verify():
+            initial_stage_satisfied = True
+            print(f"{time.time() - t1}")
+        else:
+            condition_persistor.persist()
+
+    gui.update_substep(0)  # substep 1 satisfied
 
     """
     B) In-progress conditions to be satisfied:
@@ -593,27 +602,41 @@ def step7_validator(step_GUI):
     """
     in_progress_stage_satisfied = False
     num_rotations = 0
-    step_GUI.update_substep(1 + num_rotations)
+    gui.update_substep(1 + num_rotations)
+    condition_persistor = Persistor(frames=30)
     while not in_progress_stage_satisfied:
-        data = np.array(cv_queue.get())  # [[xyxy(4), conf(1), class(1)], ...]
+        data = cv_queue.get()  # [[xyxy(4), conf(1), class(1)], ...]
+
+        # if necessary objs do not exist (caveat: glitch/hidden for brief moment)
+        if len(data[data[:, 5] == PEDAL_LOCKRING_WRENCH]) == 0 or len(data[data[:, 5] == PEDAL]) == 0 or len(
+                data[data[:, 5] == HAND]) == 0:
+            continue
+
         pedal = data[data[:, 5] == PEDAL][0]
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
+
         if sensor_detect("is rotating"):
             print(f"detecting rotation...({num_rotations}/3)")
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
             # takes max to determine the iou of the most likely hand holding wrench (???)
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
-            if sensor_detect("completed one rotation"):
+            print(f"pedal_pedal_lockring_iou={pedal_pedal_lockring_iou}, hand_pedal_lockring_iou={hand_pedal_lockring_iou}")
+
+            if sensor_detect("completed one rotation") and num_rotations < 3:
                 print("one rotation completed")
                 num_rotations += 1
-                step_GUI.update_substep(1 + num_rotations)
+                gui.update_substep(1 + num_rotations)
 
-            if not (pedal_pedal_lockring_iou > 0.2 and hand_pedal_lockring_iou > 0.5 and num_rotations == 3):
+            if not (pedal_pedal_lockring_iou > 0.1 and hand_pedal_lockring_iou > 0.5 and num_rotations == 3):
                 continue
-            in_progress_stage_satisfied = True
 
-    return start_time - time.time()
+            if condition_persistor.verify():
+                in_progress_stage_satisfied = True
+            else:
+                condition_persistor.persist()
+
+    return time.time() - start_time
 
 
 # ===================== GUI CLASS ==============================

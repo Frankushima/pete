@@ -3,6 +3,7 @@
 # Helper Functions for Decision Logic
 #
 #**************************************
+import torch
 
 # print(names[int(det[0][5])]) in GUI_detect.py gives the following
 # ['adjustable monkey wrench', 
@@ -121,3 +122,34 @@ def is_overlapping(detA, detB):
         return True, iou
     else:
         return False, iou
+
+
+def bbox_intersection(box1, box2):
+    # xyxy
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1[0], box1[1], box1[2], box1[3]
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2[0], box2[1], box2[2], box2[3]
+    # Intersection area
+    inter = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * \
+            (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0)
+    return inter
+
+def bbox_area(box):
+    return (box[2] - box[0]) * (box[3] - box[1])
+
+
+# ==================== PERSISTOR CLASS =========================
+class Persistor:
+    def __init__(self, frames: int):
+        self.condition = frames
+        self.counter = 0
+
+    def persist(self):
+        self.counter += 1
+        print(f"Condition satisfied. Persisted ({self.counter}/{self.condition}).")
+
+    def verify(self):
+        return self.counter == self.condition
+
+    def disrupt(self):
+        self.counter = 0
+        print(f"Condition failed. Disrupted ({self.counter}/{self.condition}).")
