@@ -3,6 +3,7 @@
 # Helper Functions for Decision Logic
 #
 #**************************************
+import numpy as np
 import torch
 
 # print(names[int(det[0][5])]) in GUI_detect.py gives the following
@@ -139,17 +140,19 @@ def bbox_area(box):
 
 # ==================== PERSISTOR CLASS =========================
 class Persistor:
-    def __init__(self, frames: int):
+    def __init__(self, frames: int, condition_name):
         self.condition = frames
         self.counter = 0
+        self.name = condition_name
 
     def persist(self):
         self.counter += 1
-        print(f"Condition satisfied. Persisted ({self.counter}/{self.condition}).")
+        print(f"[{self.name}] Persisted ({self.counter}/{self.condition}).")
 
     def verify(self):
-        return self.counter == self.condition
+        return self.counter >= self.condition
 
-    def disrupt(self):
-        self.counter = 0
-        print(f"Condition failed. Disrupted ({self.counter}/{self.condition}).")
+    def reset(self, hard=True):
+        if hard and np.random.random() < 0.8:
+            self.counter = 0
+            print(f"[{self.name}] Disrupted ({self.counter}/{self.condition}).")

@@ -34,7 +34,7 @@ procedure = []
 gui = None
 flag = False
 cv_queue = queue.Queue()
-
+terminate = threading.Event()
 
 def detect(save_img=False):
     global gui, flag, cv_queue
@@ -236,7 +236,7 @@ def decision_logic():
     while True:  # prevent calling before initialization
         if gui is not None: break
 
-    while current_step < len(procedure):
+    while current_step + 1 < len(procedure):
         """
         Decision making frame goes here: we're simply calling validate() on the current step. Each step has its 
         own `validate()` method that is defined at initialization of the procedure. The crux of decision logic is 
@@ -511,13 +511,12 @@ def decision_logic():
             time.sleep(5)
             gui.mark_step_done(DONE)
 
-        finished = False
-        while current_step == 6 and not finished:
+        while current_step == 6 and not terminate.is_set():
             print(f"In Step {current_step + 1} Now")
             step_runtime = step7_validator()
             print(f"Step 7 runtime={step_runtime} secs")
             gui.mark_step_done(DONE)
-            finished = True
+            terminate.set()
 
 
 # ===================== Step Logics ============================
@@ -549,7 +548,7 @@ def step7_validator():
     """
 
     initial_stage_satisfied = False
-    condition_persistor = Persistor(frames=30)
+    condition_persistor = Persistor(frames=30, condition_name="Initial Stage")
     while not initial_stage_satisfied:
         t1 = time.time()
         """
@@ -576,13 +575,13 @@ def step7_validator():
         # print(f"bolt_crank={bbox_intersection(bolt, crank_arm)}/{bbox_area(bolt)}")
         # print(f"pedal_crank={pedal_crank_iou}\n")
 
-        if pedal_crank_iou < 0.08 or pedal_crank_iou > 0.2 or bbox_intersection(bolt, crank_arm) + 0.001 < bbox_area(bolt):
-            condition_persistor.disrupt()
+        if pedal_crank_iou < 0.05 or pedal_crank_iou > 0.2 or bbox_intersection(bolt, crank_arm) + 0.001 < bbox_area(bolt):
+            condition_persistor.reset()
             continue
 
         if condition_persistor.verify():
             initial_stage_satisfied = True
-            print(f"{time.time() - t1}")
+            print(f"{time.time() - t1} seconds")
         else:
             condition_persistor.persist()
 
@@ -603,8 +602,10 @@ def step7_validator():
     in_progress_stage_satisfied = False
     num_rotations = 0
     gui.update_substep(1 + num_rotations)
-    condition_persistor = Persistor(frames=30)
+    condition_persistor = Persistor(frames=5, condition_name="1 rotation")
+    MIN_ROTATION = 3
     while not in_progress_stage_satisfied:
+        # print("still running...")
         data = cv_queue.get()  # [[xyxy(4), conf(1), class(1)], ...]
 
         # if necessary objs do not exist (caveat: glitch/hidden for brief moment)
@@ -621,20 +622,21 @@ def step7_validator():
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
             # takes max to determine the iou of the most likely hand holding wrench (???)
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
-            print(f"pedal_pedal_lockring_iou={pedal_pedal_lockring_iou}, hand_pedal_lockring_iou={hand_pedal_lockring_iou}")
+            # print(f"pedal_pedal_lockring_iou={pedal_pedal_lockring_iou}, hand_pedal_lockring_iou={hand_pedal_lockring_iou}")
 
-            if sensor_detect("completed one rotation") and num_rotations < 3:
-                print("one rotation completed")
+            if sensor_detect("completed one rotation") and num_rotations < MIN_ROTATION and condition_persistor.verify():
+                # print("one rotation completed")
                 num_rotations += 1
                 gui.update_substep(1 + num_rotations)
+                condition_persistor.reset(False)
 
-            if not (pedal_pedal_lockring_iou > 0.1 and hand_pedal_lockring_iou > 0.5 and num_rotations == 3):
-                continue
-
-            if condition_persistor.verify():
-                in_progress_stage_satisfied = True
-            else:
+            if pedal_pedal_lockring_iou > 0.1 and hand_pedal_lockring_iou > 0:
                 condition_persistor.persist()
+            else:
+                continue
+            print(f"num rotations = {num_rotations}")
+            if num_rotations >= MIN_ROTATION and condition_persistor.verify():
+                in_progress_stage_satisfied = True
 
     return time.time() - start_time
 
@@ -981,7 +983,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # parser.add_argument('--weights', nargs='+', type=str, default='VAR_B40E40_Transfer_Fine-Tune_0-0001.pt', help='model.pt path(s)')
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/step7.MOV',
+    parser.add_argument('--source', type=str, default='test_videos/install2_7.MOV',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.4, help='object confidence threshold')

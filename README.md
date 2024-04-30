@@ -11,11 +11,11 @@ Note: a lot of stuff is hardcoded due to basically trial and error to get this s
 2. Download model weight files from [here](https://drive.google.com/drive/u/1/folders/1_MV9JUMt3BgdXSHATWRznBClBUjr-OBL)
 3. Run a test run with default detect:
 ```bash
-python detect.py --weights=VAR_B40E40_Transfer_Fine-Tune_0-0001.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
+python detect.py --weights=yolov7-tiny.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
 ```
 4. Run a command similar to this one (This is the actual command you will use from now on):
 ```bash
-python GUI_detect.py --weights=VAR_B40E40_Transfer_Fine-Tune_0-0001.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
+python GUI_detect.py --weights=yolov7-tiny.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
 ```
 
 Arguments:
