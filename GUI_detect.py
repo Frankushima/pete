@@ -34,7 +34,9 @@ procedure = []
 gui = None
 flag = False
 cv_queue = queue.Queue()
+sensor_queue = queue.Queue()
 terminate = threading.Event()
+sensor_in_use = threading.Event()
 
 def detect(save_img=False):
     global gui, flag, cv_queue
@@ -217,10 +219,40 @@ def detect(save_img=False):
 
     print(f'Done. ({time.time() - t0:.3f}s)')
 
-
-def sensor_detect(what):
+sample = 0
+dummy_sensor_data = process("./test_sensor_data/output.txt")
+ewma_sd = 0     # ewma sensor data
+def sensor_detect():
     """
     Dummy sensor
+    """
+    global sensor_queue, sample, ewma_sd
+    # if not using sensor tool, simply ignore data
+    while sensor_in_use.is_set():
+        # read + a lil EWMA
+        if sample == 0: ewma_sd = dummy_sensor_data[sample] * 1.4
+        else:
+            ewma_sd = 0.75 * ewma_sd + 0.25 * dummy_sensor_data[sample] * 1.4      # 1.4 for calibration purposes
+
+        # process (should also increase sampling rate since processing takes time?)
+        is_rotating = ewma_sd > 3.5        # lmao
+
+        data = {
+            'id': sample,
+            'rotating': is_rotating,
+            # 'num_rotations': 0,
+            # 'degrees_since_last_rotation': 0
+        }
+
+        sample += 1
+        sensor_queue.put(data)
+
+
+fps = 17
+sr = 10
+def sensor_logic(what):
+    """
+    can be called from decision_logic()
     """
     lmao = 0.5
     if what == "is rotating":
@@ -229,7 +261,6 @@ def sensor_detect(what):
         lmao = 0.2
 
     return np.random.random() < lmao
-
 
 def decision_logic():
     global procedure, current_step, gui, cv_queue
@@ -537,6 +568,7 @@ def step7_validator():
     # a lil timer
     start_time = time.time()
     print(f"Started step 7")
+    sensor_in_use.set()
 
     """
     A) Initial stage condition to be satisfied (i.e. condition for starting stage):
@@ -617,14 +649,14 @@ def step7_validator():
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
-        if sensor_detect("is rotating"):
+        if sensor_logic("is rotating"):
             print(f"detecting rotation...({num_rotations}/3)")
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
             # takes max to determine the iou of the most likely hand holding wrench (???)
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
             # print(f"pedal_pedal_lockring_iou={pedal_pedal_lockring_iou}, hand_pedal_lockring_iou={hand_pedal_lockring_iou}")
 
-            if sensor_detect("completed one rotation") and num_rotations < MIN_ROTATION and condition_persistor.verify():
+            if sensor_logic("completed one rotation") and num_rotations < MIN_ROTATION and condition_persistor.verify():
                 # print("one rotation completed")
                 num_rotations += 1
                 gui.update_substep(1 + num_rotations)
@@ -638,6 +670,7 @@ def step7_validator():
             if num_rotations >= MIN_ROTATION and condition_persistor.verify():
                 in_progress_stage_satisfied = True
 
+    sensor_in_use.clear()
     return time.time() - start_time
 
 
@@ -792,7 +825,7 @@ class DisplayGUI:
 
         # clear out and initialize procedure + step count
         procedure = []
-        current_step = 5
+        current_step = 0
 
         # dummy steps
         # TODO: define steps & their individual criteria
@@ -934,6 +967,11 @@ class DisplayGUI:
         detect_thread.daemon = True
         detect_thread.start()
 
+        # Sensor  ===================================
+        sensor_thread = threading.Thread(target=sensor_detect)
+        sensor_thread.daemon = True
+        sensor_thread.start()
+
         while not flag:
             time.sleep(1)
 
@@ -983,7 +1021,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # parser.add_argument('--weights', nargs='+', type=str, default='VAR_B40E40_Transfer_Fine-Tune_0-0001.pt', help='model.pt path(s)')
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/install2_7.MOV',
+    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstall.MOV',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.4, help='object confidence threshold')
