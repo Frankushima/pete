@@ -477,7 +477,7 @@ def decision_logic():
 
             # find hand
             if not sub_conditions[0]:
-                time.sleep(5)
+                time.sleep(40)
                 sub_conditions[0] = True
 
             # find crank arm
@@ -494,7 +494,7 @@ def decision_logic():
             if all(sub_conditions):
                 # print("Step 4 Done")
                 gui.mark_step_done(DONE)
-        sub_conditions= [False for i in range(7)]
+        sub_conditions= [False for i in range(5)]
         bolt_time = 0
         while(current_step ==  4):
             procedure[current_step].update_status(IN_PROGRESS)
@@ -506,14 +506,17 @@ def decision_logic():
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
                 if(hand_count):
-                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    #procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    gui.update_substep(0)
                     sub_conditions[0] = True
-
+            #['found hands', 'found crank arm', 'screwing bolt into crank arm', 'screwed bolt into crank arm'']
             # SUB 1 : is there a pedal wrench? (index = 7)
             if not sub_conditions[1] and sub_conditions[0] == True:
                 crank_count, crank_det = logic_tools.find_class(data, 11)
                 if (crank_count):
-                    procedure[current_step].update_description(u'Found crank arm👍')
+                    print("kumbaya")
+                    #procedure[current_step].update_description(u'Found crank arm👍')
+                    gui.update_substep(1)
                     sub_conditions[1] = True
             #Add rotating condition
             # SUB 2 : are they overlapped? hand holding spindle?
@@ -530,10 +533,12 @@ def decision_logic():
                         if (hand_i_bolt < 0.015 and crank_i_bolt < 0.015):
                             bolt_time +=1
                             if(not sub_conditions[2]):
-                                procedure[current_step].update_description(u'Screwing bolt into crank arm...')
+                                #procedure[current_step].update_description(u'Screwing bolt into crank arm...')
+                                gui.update_substep(2)
                                 sub_conditions[2] = True
                             if (bolt_time)>18:
-                                procedure[current_step].update_description(u'Screwed bolt into crank arm')
+                                #procedure[current_step].update_description(u'Screwed bolt into crank arm')
+                                gui.update_substep(3)
                                 sub_conditions[3] = True
             if all(sub_conditions[0:4]):
                 print("everything done")
@@ -541,6 +546,7 @@ def decision_logic():
         pedal_time = 0
         sub_conditions= [False for i in range(7)]
         while(current_step ==  5):
+        #['found hands', 'found pedal', 'hand holding pedal', 'screwing pedal into crank', 'screwed pedal into crank']
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
 
@@ -550,14 +556,16 @@ def decision_logic():
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
                 if(hand_count):
-                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    #procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    gui.update_substep(0)
                     sub_conditions[0] = True
 
             # SUB 1 : is there a pedal wrench? (index = 7)
             if not sub_conditions[1] and sub_conditions[0] == True:
                 ped_count, ped_det = logic_tools.find_class(data, 11)
                 if (ped_count):
-                    procedure[current_step].update_description(u'Found pedal👍')
+                    #procedure[current_step].update_description(u'Found pedal👍')
+                    gui.update_substep(1)
                     sub_conditions[1] = True
             #Add rotating condition
             # SUB 2 : are they overlapped? hand holding spindle?
@@ -569,29 +577,34 @@ def decision_logic():
             # SUB 3 : leaving right hand + increasing left hand
             if not sub_conditions[2] and sub_conditions[1] == True:
                     if over_dict.get((4,11)) or over_dict.get((11,4)):
-                        procedure[current_step].update_description(u'Hand holding pedal 👍')
+                        #procedure[current_step].update_description(u'Hand holding pedal 👍')
+                        gui.update_substep(2)
                         #print("Intrsection of hand and pedal: ",over_dict.get((4,11)) or over_dict.get((11,4)))
                         sub_conditions[2] = True
-            if not sub_conditions[3] and sub_conditions[1] == True:
+            if not sub_conditions[4] and sub_conditions[1] == True:
                     crank_i_pedal = over_dict.get((12,11)) or over_dict.get((12,11))
                     #crank_i_bolt = over_dict.get((12,10)) or over_dict.get((10,12))
                     if (crank_i_pedal):
                         if (crank_i_pedal < 0.05):
                             pedal_time +=1
-                            if(not sub_conditions[4]):
+                            if(not sub_conditions[3]):
                                 if(pedal_time > 2):
-                                    procedure[current_step].update_description(u'Screwing pedal into crank arm...')
-                                    sub_conditions[4] = True
+                                    #procedure[current_step].update_description(u'Screwing pedal into crank arm...')
+                                    gui.update_substep(3)
+                                    sub_conditions[3] = True
                             elif(pedal_time>40):
-                                procedure[current_step].update_description(u'Screwed pedal into crank arm')
-                                sub_conditions[3] = True
-            if sub_conditions[3] and sub_conditions[1] == True:
+                                #procedure[current_step].update_description(u'Screwed pedal into crank arm')
+                                gui.update_substep(4)
+                                sub_conditions[4] = True
+            if sub_conditions[4] and sub_conditions[1] == True:
                     hand_i_pedal = over_dict.get((4,11)) or over_dict.get((4,11))
                     if not (hand_i_pedal):
+                        gui.update_substep(5)
                         sub_conditions[5] = True
             if all(sub_conditions[0:6]):
                 print("everything done")
                 gui.mark_step_done(DONE)
+        sub_conditions= [False for i in range(7)]
         start_7 = time.perf_counter()
         time_7 = 0
         while(current_step ==  6):
@@ -599,18 +612,20 @@ def decision_logic():
             data = cv_queue.get()
 
             num_class_detected = len(data)
-
+            #['found hands', 'found pedal wrench', 'hand holding pedal wrench', 'pedal wrench locked into pedal']
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
                 if(hand_count):
-                    procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    #procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                    gui.update_substep(0)
                     sub_conditions[0] = True
 
             # SUB 1 : is there a pedal wrench? (index = 7)
             if not sub_conditions[1] and sub_conditions[0] == True:
                 pwrench_count, pwrench_det = logic_tools.find_class(data, 5)
-                procedure[current_step].update_description(u'Found pedal wrench 👍')
+                #procedure[current_step].update_description(u'Found pedal wrench 👍')
+                gui.update_substep(1)
                 sub_conditions[1] = True
             #Add rotating condition
             # SUB 2 : are they overlapped? hand holding spindle?
@@ -623,7 +638,8 @@ def decision_logic():
                 time_7 = end_7-start_7
                 if over_dict.get((5,4)) or over_dict.get((4,5)):
                     if(time_7 > 10):
-                        procedure[current_step].update_description(u'Hand holding pedal wrench 👍')
+                        #procedure[current_step].update_description(u'Hand holding pedal wrench 👍')
+                        gui.update_substep(2)
                         sub_conditions[2] = True
             # SUB 3 : leaving right hand + increasing left hand
             if not sub_conditions[3] and sub_conditions[1] == True:
@@ -631,11 +647,13 @@ def decision_logic():
                         end_7 = time.perf_counter()
                         time_7 = end_7-start_7
                         if(time_7 > 10):
-                            procedure[current_step].update_description(u'Pedal wrench locked into pedal 👍')
+                            #procedure[current_step].update_description(u'Pedal wrench locked into pedal 👍')
+                            gui.update_substep(3)
                             sub_conditions[3] = True
             if all(sub_conditions[0:4]):
                 print("everything done")
                 gui.mark_step_done(DONE)
+                #['found hands', 'found pedal wrench', 'hand holding pedal wrench', 'pedal wrench locked into pedal' ]
 class DisplayGUI:
     def __init__(self, app):
         """
@@ -822,19 +840,19 @@ class DisplayGUI:
                 title = f"Step {i+1}, Little Bolt! IN!"
                 description = "you got this."
                 status = NOT_DONE
-                substeps = []
-
+                substeps = ['5.1 - found hands', '5.2 -found crank arm', '5.3 -screwing bolt into crank arm', '5.4 -screwed bolt into crank arm']
+            
             if i == 5:
                 title = f"Step {i+1}, PEDALLLL IN!"
                 description = "you got this."
                 status = NOT_DONE
-                substeps = []
-
+                substeps = ['6.1 - found hands', '6.2 -found pedal', '6.3 -hand holding pedal', '6.4 -screwing pedal into crank', '6.5 -screwed pedal into crank', '6.6 -detached hand and pedal']
             if i == 6:
                 title = f"Step {i+1}, Pedal Locking Wrench IN!"
                 description = "you got this."
                 status = NOT_DONE
-                substeps = []
+                substeps = ['7.1 - found hands', '7.2 - found pedal wrench', '7.3 - hand holding pedal wrench', '7.4 - pedal wrench locked into pedal']
+
 
             s = Step(i, title, description, status, substeps)
 
