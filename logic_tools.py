@@ -156,7 +156,7 @@ def process(file):
                 values = [float(val) for val in readings[1:] if not ":" in val]
             data_dict[key] = values
         full.append(data_dict)
-    return [entry['Accel'][2] for entry in full]
+    return [entry['Angle'][2] for entry in full]
 
 def camera_sensor_frame_match(x, sr=10, fps=17):
     """

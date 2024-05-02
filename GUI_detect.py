@@ -227,31 +227,36 @@ def sensor_detect():
     """
     Dummy sensor
     """
-    # if not using sensor tool, simply ignore data
-    while sensor_in_use.is_set():
-        global sensor_queue, sample, ewma_sd, sum_sd
+    global sensor_in_use, terminate, sensor_queue, sample, ewma_sd, sum_sd
 
-        # Read in + a lil EWMA
-        if sample == 0: ewma_sd = dummy_sensor_data[sample] * 1.4
+    while not terminate.is_set():
+        # if not using sensor tool, simply ignore data
+        if not sensor_in_use.is_set():
+            print("", end="")
         else:
-            ewma_sd = 0.75 * ewma_sd + 0.25 * dummy_sensor_data[sample] * 1.4      # 1.4 for calibration purposes
-        sum_sd += ewma_sd
-        sample += 1
+            print("sensor in use = ================================================")
 
-        # Matching camera and sensor via sampling rate (ceiling)
-        if not camera_sensor_frame_match(x=sample): continue
+            # Read in + a lil EWMA
+            if sample == 0:
+                ewma_sd = dummy_sensor_data[sample] * 1.4
+            else:
+                ewma_sd = 0.75 * ewma_sd + 0.25 * dummy_sensor_data[sample] * 1.4  # 1.4 for calibration purposes
+            sum_sd += ewma_sd
+            sample += 1
 
-        # Process (should also increase sampling rate since processing takes time?)
-        is_rotating = ewma_sd > 3.5        # lmao
+            # Matching camera and sensor via sampling rate (ceiling)
+            if not camera_sensor_frame_match(x=sample): continue
 
-        data = {
-            'rotating': is_rotating,
-            'degrees': sum_sd,
-            'num_rotations': sum_sd // 360,
-        }
+            # Process (should also increase sampling rate since processing takes time?)
+            is_rotating = ewma_sd > 3.5  # lmao
 
-        sensor_queue.put(data)
+            data = {
+                'rotating': is_rotating,
+                'degrees': sum_sd,
+                'num_rotations': sum_sd // 360,
+            }
 
+            sensor_queue.put(data)
 
 def decision_logic():
     global procedure, current_step, gui, cv_queue
@@ -559,7 +564,6 @@ def step7_validator():
     # a lil timer
     start_time = time.time()
     print(f"Started step 7")
-    sensor_in_use.set()
 
     """
     A) Initial stage condition to be satisfied (i.e. condition for starting stage):
@@ -627,6 +631,7 @@ def step7_validator():
     gui.update_substep(1 + num_rotations)
     condition_persistor = Persistor(frames=5, condition_name="1 rotation")
     MIN_ROTATION = 3
+    global sensor_queue, sensor_in_use
     while not in_progress_stage_satisfied:
         # print("still running...")
         data = cv_queue.get()  # [[xyxy(4), conf(1), class(1)], ...]
@@ -636,11 +641,15 @@ def step7_validator():
                 data[data[:, 5] == HAND]) == 0:
             continue
 
+        sensor_in_use.set()
+        print("Sensor set")
+
         pedal = data[data[:, 5] == PEDAL][0]
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
         sensor_data = sensor_queue.get()
+        print(sensor_data, "\n")
         if sensor_data['rotating']:
             print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
@@ -815,7 +824,7 @@ class DisplayGUI:
 
         # clear out and initialize procedure + step count
         procedure = []
-        current_step = 0
+        current_step = 5
 
         # dummy steps
         # TODO: define steps & their individual criteria
@@ -958,9 +967,10 @@ class DisplayGUI:
         detect_thread.start()
 
         # Sensor  ===================================
-        sensor_thread = threading.Thread(target=sensor_detect)
+        sensor_thread = threading.Thread(target=sensor_detect, args=[])
         sensor_thread.daemon = True
         sensor_thread.start()
+        print("started sensor thread")
 
         while not flag:
             time.sleep(1)
@@ -1011,7 +1021,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # parser.add_argument('--weights', nargs='+', type=str, default='VAR_B40E40_Transfer_Fine-Tune_0-0001.pt', help='model.pt path(s)')
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstall.MOV',
+    parser.add_argument('--source', type=str, default='test_videos/step7.mov',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.4, help='object confidence threshold')

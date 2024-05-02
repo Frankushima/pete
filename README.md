@@ -45,7 +45,7 @@ raspivid -t 0 -h 972 -w 1296 -fps 25 -hf -b 2000000 -o - | gst-launch-1.0 -v fds
 
 - Launch this script:
 ```bash
-python GUI_detect.py --weights=yolov7-tiny.pt --source=sources.txt --nosave --view-img --no-trace
+python GUI_detect.py --weights=Demo_Only_B40.pt --source=test_videos/step7.mov --nosave --view-img --no-trace
 ```
 
 Quirks with this setup:
