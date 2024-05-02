@@ -222,45 +222,36 @@ def detect(save_img=False):
 sample = 0
 dummy_sensor_data = process("./test_sensor_data/output.txt")
 ewma_sd = 0     # ewma sensor data
+sum_sd = 0
 def sensor_detect():
     """
     Dummy sensor
     """
-    global sensor_queue, sample, ewma_sd
     # if not using sensor tool, simply ignore data
     while sensor_in_use.is_set():
-        # read + a lil EWMA
+        global sensor_queue, sample, ewma_sd, sum_sd
+
+        # Read in + a lil EWMA
         if sample == 0: ewma_sd = dummy_sensor_data[sample] * 1.4
         else:
             ewma_sd = 0.75 * ewma_sd + 0.25 * dummy_sensor_data[sample] * 1.4      # 1.4 for calibration purposes
+        sum_sd += ewma_sd
+        sample += 1
 
-        # process (should also increase sampling rate since processing takes time?)
+        # Matching camera and sensor via sampling rate (ceiling)
+        if not camera_sensor_frame_match(x=sample): continue
+
+        # Process (should also increase sampling rate since processing takes time?)
         is_rotating = ewma_sd > 3.5        # lmao
 
         data = {
-            'id': sample,
             'rotating': is_rotating,
-            # 'num_rotations': 0,
-            # 'degrees_since_last_rotation': 0
+            'degrees': sum_sd,
+            'num_rotations': sum_sd // 360,
         }
 
-        sample += 1
         sensor_queue.put(data)
 
-
-fps = 17
-sr = 10
-def sensor_logic(what):
-    """
-    can be called from decision_logic()
-    """
-    lmao = 0.5
-    if what == "is rotating":
-        lmao = 0.7
-    elif what == "completed one rotation":
-        lmao = 0.2
-
-    return np.random.random() < lmao
 
 def decision_logic():
     global procedure, current_step, gui, cv_queue
@@ -649,25 +640,24 @@ def step7_validator():
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
-        if sensor_logic("is rotating"):
-            print(f"detecting rotation...({num_rotations}/3)")
+        sensor_data = sensor_queue.get()
+        if sensor_data['rotating']:
+            print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
             # takes max to determine the iou of the most likely hand holding wrench (???)
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
-            # print(f"pedal_pedal_lockring_iou={pedal_pedal_lockring_iou}, hand_pedal_lockring_iou={hand_pedal_lockring_iou}")
 
-            if sensor_logic("completed one rotation") and num_rotations < MIN_ROTATION and condition_persistor.verify():
+            if sensor_data['num_rotations'] < MIN_ROTATION and condition_persistor.verify():
                 # print("one rotation completed")
-                num_rotations += 1
-                gui.update_substep(1 + num_rotations)
+                gui.update_substep(1 + sensor_data['num_rotations'])
                 condition_persistor.reset(False)
 
             if pedal_pedal_lockring_iou > 0.1 and hand_pedal_lockring_iou > 0:
                 condition_persistor.persist()
             else:
                 continue
-            print(f"num rotations = {num_rotations}")
-            if num_rotations >= MIN_ROTATION and condition_persistor.verify():
+            print(f"num rotations = {sensor_data['num_rotations']}")
+            if sensor_data['num_rotations'] >= MIN_ROTATION and condition_persistor.verify():
                 in_progress_stage_satisfied = True
 
     sensor_in_use.clear()

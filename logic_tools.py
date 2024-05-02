@@ -158,6 +158,21 @@ def process(file):
         full.append(data_dict)
     return [entry['Accel'][2] for entry in full]
 
+def camera_sensor_frame_match(x, sr=10, fps=17):
+    """
+    check if the x-th sensor sample matches to a frame in the camera
+    param: sr = sampling rate (sensor)
+    param: fps = frame rate (cam)
+    """
+    G = math.gcd(sr, fps)
+    if x % G != 0:
+        return False
+    remainder = x % sr
+    for i in range(G):
+        if remainder == (i * fps) % sr:
+            return True
+    return False
+
 # ==================== PERSISTOR CLASS =========================
 class Persistor:
     def __init__(self, frames: int, condition_name):
