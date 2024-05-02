@@ -164,13 +164,8 @@ def camera_sensor_frame_match(x, sr=10, fps=17):
     param: sr = sampling rate (sensor)
     param: fps = frame rate (cam)
     """
-    G = math.gcd(sr, fps)
-    if x % G != 0:
-        return False
-    remainder = x % sr
-    for i in range(G):
-        if remainder == (i * fps) % sr:
-            return True
+    for i in range(x):
+        if i * fps // sr == x: return True
     return False
 
 # ==================== PERSISTOR CLASS =========================

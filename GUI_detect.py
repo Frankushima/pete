@@ -240,7 +240,7 @@ def sensor_detect():
             if sample == 0:
                 ewma_sd = dummy_sensor_data[sample] * 1.4
             else:
-                ewma_sd = 0.75 * ewma_sd + 0.25 * dummy_sensor_data[sample] * 1.4  # 1.4 for calibration purposes
+                ewma_sd = 0.75 * ewma_sd + 0.25 * dummy_sensor_data[sample % len(dummy_sensor_data)] * 1.4  # 1.4 for calibration purposes
             sum_sd += ewma_sd
             sample += 1
 
@@ -641,7 +641,7 @@ def step7_validator():
                 data[data[:, 5] == HAND]) == 0:
             continue
 
-        sensor_in_use.set()
+        if not sensor_in_use.is_set(): sensor_in_use.set()
         print("Sensor set")
 
         pedal = data[data[:, 5] == PEDAL][0]
