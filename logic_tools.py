@@ -5,18 +5,18 @@
 #**************************************
 
 # print(names[int(det[0][5])]) in GUI_detect.py gives the following
-# ['adjustable monkey wrench',
-# 'monkey wrench',
-# 'allen key',
-# 'double-flats wrench',
-# 'hand',
-# 'pedal lockring wrench',
-# 'crank remover',
-# 'spindle',
-# 'doubleFlatsBottomBracket',
-# 'crankArmNonChainSide',
-# 'bolt',
-# 'pedal',
+# ['adjustable monkey wrench', 
+# 'monkey wrench', 
+# 'allen key', 
+# 'double-flats wrench', 
+# 'hand', 
+# 'pedal lockring wrench', 
+# 'crank remover', 
+# 'spindle', 
+# 'doubleFlatsBottomBracket', 
+# 'crankArmNonChainSide', 
+# 'bolt', 
+# 'pedal', 
 # 'crankArm']
 
 from utils.general import bbox_iou
@@ -50,13 +50,13 @@ def are_they_the_same_detections(box_a_det, box_b_det, threshold=0):
 
     if distance > threshold:
         return False, distance
-
+    
     return True, distance
 
 def find_hands(det):
     if not len(det):
         return
-
+    
     count = 0
     hands = []
 
@@ -68,11 +68,11 @@ def find_hands(det):
 
     return count, hands
 
-def RL_hands(hands_det):
+def RL_hands(hands_det):        
     if len(hands_det) != 2:
         print("Not enough hands")
         return
-
+    
     hand1 = hands_det[0]
     hand2 = hands_det[1]
 
@@ -91,7 +91,7 @@ def RL_hands(hands_det):
 def find_class(det, cls_id):
     if not len(det):
         return
-
+    
     count = 0
     target_class = []
 
@@ -104,18 +104,16 @@ def find_class(det, cls_id):
 
 def find_overlapping(det):
     overlapping_detections = []
-    gui_input = {}
+
     for a in range(len(det)):
         for b in range(a + 1, len(det)):
             iou = bbox_iou(det[a][:4], det[b][:4])
-            if iou > 0:
+            if iou > 0:  
                 overlapping_detections.append((det[a], det[b], iou))
-                gui_input.update({(int(det[a][5]),int(det[b][5])):float(iou)})
 
     overlapping_pairs_count = len(overlapping_detections)
-    #print(overlapping_pairs_count)
-    #print(gui_input)
-    return overlapping_pairs_count, overlapping_detections, gui_input
+
+    return overlapping_pairs_count, overlapping_detections
 
 def is_overlapping(detA, detB):
     iou = bbox_iou(detA[:4], detB[:4])
