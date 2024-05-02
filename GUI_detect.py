@@ -498,7 +498,7 @@ def decision_logic():
         while current_step == 4:
             time.sleep(5)
             gui.mark_step_done(DONE)
-        sub_conditions= [False for i in range(1)]
+        sub_conditions= [False for i in range(7)]
         bolt_time = 0
         while(current_step ==  5):
             procedure[current_step].update_status(IN_PROGRESS)
@@ -544,7 +544,7 @@ def decision_logic():
                 gui.mark_step_done(DONE)
         pedal_time = 0
         sub_conditions= [False for i in range(7)]
-        while(current_step ==  1):
+        while(current_step ==  6):
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
 
