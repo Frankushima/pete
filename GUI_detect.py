@@ -494,13 +494,9 @@ def decision_logic():
             if all(sub_conditions):
                 # print("Step 4 Done")
                 gui.mark_step_done(DONE)
-
-        while current_step == 4:
-            time.sleep(5)
-            gui.mark_step_done(DONE)
         sub_conditions= [False for i in range(7)]
         bolt_time = 0
-        while(current_step ==  5):
+        while(current_step ==  4):
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
 
@@ -544,7 +540,7 @@ def decision_logic():
                 gui.mark_step_done(DONE)
         pedal_time = 0
         sub_conditions= [False for i in range(7)]
-        while(current_step ==  6):
+        while(current_step ==  5):
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
 
@@ -598,7 +594,7 @@ def decision_logic():
                 gui.mark_step_done(DONE)
         start_7 = time.perf_counter()
         time_7 = 0
-        while(current_step ==  7):
+        while(current_step ==  6):
             procedure[current_step].update_status(IN_PROGRESS)
             data = cv_queue.get()
 
