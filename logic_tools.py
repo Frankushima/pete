@@ -186,6 +186,9 @@ def complete_overlap(detA, detB):
     
     else:
         return False
+    
+def rotation_detect():
+    return
 
 
 

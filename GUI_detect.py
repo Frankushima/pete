@@ -418,7 +418,7 @@ def decision_logic():
         # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
         # Both Hand hold Bracket
         # Single Hand Tighten
-        sub_conditions = [False for i in range(6)]
+        sub_conditions = [False for i in range(9)]
         while current_step == 1:
             data = cv_queue.get()
             num_class_detected = len(data)
@@ -467,7 +467,6 @@ def decision_logic():
 
                 if double_flat_bb_count and spindle_count:
                     complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
-                    print(complete_overlap)
                     if complete_overlap:
                         gui.update_substep(4)
                         sub_conditions[4] = True
@@ -491,8 +490,40 @@ def decision_logic():
                     if complete_overlap:
                         gui.update_substep(5)
                         sub_conditions[5] = True
+    
+            # SUB 6: Hand is Out of Field
+            if not sub_conditions[6] and sub_conditions[5] == True:
+                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
+                if hand_count == 0:
+                    gui.update_substep(6)
+                    sub_conditions[6] = True
 
-            
+
+            # SUB 7: Reconfirm Doubleflatbottombracket is completely over spindle
+            if not sub_conditions[7] and sub_conditions[6] == True:
+                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
+                    
+                if double_flat_bb_count == 1 and spindle_count ==  1:
+                    double_flat_bb_det = double_flat_bb_det[0]
+                    spindle_det = spindle_det[0]
+
+                if double_flat_bb_count and spindle_count:
+                    complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
+                    if complete_overlap:
+                        gui.update_substep(7)
+                        sub_conditions[7] = True
+
+            # SUB 8: Only Doubleflatbottombracket and spindle left behind
+            if not sub_conditions[8] and sub_conditions[7] == True:
+                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
+
+                if num_class_detected == 2 and spindle_count == 1 and double_flat_bb_count == 1:
+                    gui.update_substep(8)
+                    sub_conditions[8] = True
+
+
 
             # if spindle + bolt + hand overlap --> passed
 
@@ -506,7 +537,9 @@ def decision_logic():
                 gui.mark_step_done(DONE)
         
         # Detections Expected: Left Hand, Right Hand, Double-flats Wrench, (DoubleFlatBottomBracket), (Spindle)
-        sub_conditions= [False for i in range(3)]
+        s4_prev_xmin
+        s4_prev_ymax
+        sub_conditions= [False for i in range(6)]
         while current_step == 2:
             data = cv_queue.get()
             num_class_detected = len(data)
@@ -527,15 +560,6 @@ def decision_logic():
 
             # overlap hands and doubleflatwrench
             if not sub_conditions[2] and sub_conditions[1] == True:
-                # over_count, over_det = logic_tools.find_overlapping(data)
-                # if over_count == 1:
-                #     single_overlap_pair = over_det[0]
-                #     # if the overlapping is between spindle and hand
-                #     if ((single_overlap_pair[0][5] == class_index['doubleflatswrench'] and single_overlap_pair[1][5] == class_index['hand']) or 
-                #     (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['doubleflatswrench'])):
-                #         gui.update_substep(2)
-                #         sub_conditions[2] = True
-                
                 hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
                 wrench_count, wrench_det = logic_tools.find_class(data, class_index['doubleflatswrench'])
 
@@ -545,7 +569,45 @@ def decision_logic():
                         gui.update_substep(2)
                         sub_conditions[2] = True
 
+            # complete overlap of wrench over doubleflatbracket
+            if not sub_conditions[3] and sub_conditions[2] == True:
+                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+                wrench_count, wrench_det = logic_tools.find_class(data, class_index['doubleflatswrench'])
+                    
+                if double_flat_bb_count == 1 and wrench_count ==  1:
+                    double_flat_bb_det = double_flat_bb_det[0]
+                    wrench_det = wrench_det[0]
+
+                if double_flat_bb_count and wrench_count:
+                    complete_overlap = logic_tools.complete_overlap(wrench_det, double_flat_bb_det)
+                    if complete_overlap:
+                        gui.update_substep(3)
+                        sub_conditions[3] = True           
+
+            # rotation detected and wrench completely over doubleflatbracket
+            if not sub_conditions[4] and sub_conditions[3] == True:
+                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+                wrench_count, wrench_det = logic_tools.find_class(data, class_index['doubleflatswrench'])
+                    
+                if double_flat_bb_count == 1 and wrench_count ==  1:
+                    double_flat_bb_det = double_flat_bb_det[0]
+                    wrench_det = wrench_det[0]
+
+                if double_flat_bb_count and wrench_count:
+                    complete_overlap = logic_tools.complete_overlap(wrench_det, double_flat_bb_det)
+                    if complete_overlap:
+                        gui.update_substep(4)
+                        sub_conditions[4] = True     
+
+            # hand is out of field
+            if not sub_conditions[5] and sub_conditions[4] == True:
+                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
+                if hand_count == 0:
+                    gui.update_substep(5)
+                    sub_conditions[5] = True
+
             # correct overlap increase/decrease
+
 
             # correct wrench location or hand location
 
@@ -791,7 +853,10 @@ class DisplayGUI:
                             '2.3 - Detect spindle',
                             '2.4 - Single Hand Holding Double Flat Bottom Bracket',
                             '2.5 - Detect Complete Overlap of Double Flat Bottom Bracket over Spindle',
-                            '2.6 - Detect Right Hand completely over Double Flat Bottom Bracket']
+                            '2.6 - Detect Right Hand completely over Double Flat Bottom Bracket',
+                            '2.7 - Hand Out of Field',
+                            '2.8 - Confirm  Double Flat Bottom Bracket completely overlaps Spindle',
+                            '2.9 - Double Flat Bottom Bracket and Spindle left behind only']
             
             if i == 2:
                 title = f"Step {i+1}, Tighten with Double Flat Wrench"
@@ -799,7 +864,10 @@ class DisplayGUI:
                 status = NOT_DONE
                 substeps = ['3.1 - Detect Double Flat Wrench',
                             '3.2 - Detect Hands',
-                            '3.3 - Detect Hand Overlap']
+                            '3.3 - Detect Hand Overlap',
+                            '3.4 - Complete Overlap of Wrench over Double Flat Bottom Bracket',
+                            '3.5 - Tighten by Rotation and Complete overlap Detected'
+                            '3.6 - Hand Out of Field']
             
             if i == 3:
                 title = f"Step {i+1}, Crank Arm Installation"
