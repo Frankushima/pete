@@ -138,6 +138,7 @@ def is_overlapping(detA, detB):
     else:
         return False, iou
 
+# in yolov7 higher y value means lower position in canvas
 def overlap_by_reference(detA, detB):
     # reference is detB
     detA_xmin, detA_ymin, detA_xmax, detA_ymax = detA[:4]
@@ -164,7 +165,7 @@ def overlap_by_reference(detA, detB):
 
     print(f'Overlap_area = {overlap_area}, detB_area = {detB_area}')
 
-    return min(overlap_area/detB_area, 1)
+    return overlap_area/detB_area
 
 
 # complete overlap is seeing if detA completely cover detB
