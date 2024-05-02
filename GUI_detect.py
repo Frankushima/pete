@@ -28,6 +28,8 @@ import queue
 import math
 import emoji
 
+from collections import Counter
+
 current_step = 0
 procedure = []
 gui = None
@@ -539,12 +541,9 @@ def decision_logic():
         # Detections Expected: Left Hand, Right Hand, Double-flats Wrench, (DoubleFlatBottomBracket), (Spindle)
         s4_prev_wrench_xmin = math.inf
         s4_prev_wrench_ymax = math.inf
+        s4_prev_wrench_ymin = math.inf
         s4_turn_count = 0
-
-        s4_first_half_flag = False
-        s4_second_half_flag = False
-
-        s4_initial_flag = False
+        s4_history = []
 
         sub_conditions= [False for i in range(6)]
         while current_step == 2:
@@ -599,53 +598,43 @@ def decision_logic():
                 if double_flat_bb_count == 1 and wrench_count ==  1:
                     double_flat_bb_det = double_flat_bb_det[0]
                     wrench_det = wrench_det[0]
-                
-                if s4_first_half_flag and s4_second_half_flag:
-                    s4_first_half_flag  = False
-                    s4_second_half_flag = False
 
                 if double_flat_bb_count and wrench_count:
                     complete_overlap = logic_tools.complete_overlap(wrench_det, double_flat_bb_det)
-                    
-                    # need calibrate these parameters
-                    offset_filter_x = 50
-                    offset_filter_y = 50
-
-                    initial_x_max = 920
-                    initial_x_min = 880
-
-                    initial_max_y = 1100
-                    initial_min_y = 1050
 
                     if complete_overlap:
                         # Note: in yolov7 higher y value means lower position in canvas
-                        # print(wrench_det)
+                        if ((wrench_det[0] < s4_prev_wrench_xmin + 50 and wrench_det[3] < s4_prev_wrench_ymax + 20) or
+                            (wrench_det[0] > s4_prev_wrench_xmin + 50 and wrench_det[1] < s4_prev_wrench_ymin + 20)):
+                            s4_history.append("Turning")
 
-                        # initial turn
-                        if not s4_initial_flag and (wrench_det[0] < initial_x_max and wrench_det[0] > initial_x_min) and (wrench_det[3] < initial_max_y and wrench_det[3] > initial_min_y):
-                            print("in initial position")
-                            s4_initial_flag = True
+                        if ((wrench_det[0] > s4_prev_wrench_xmin + 50 and wrench_det[3] > s4_prev_wrench_ymax + 20) or
+                            (wrench_det[0] < s4_prev_wrench_xmin + 50 and wrench_det[1] > s4_prev_wrench_ymin + 20)):
+                            s4_history.append("Resetting") 
 
-                        if s4_initial_flag:
-                            if (wrench_det[0] < s4_prev_wrench_xmin + offset_filter_x) and (wrench_det[3] < s4_prev_wrench_ymax + offset_filter_y):
-                                print("first_half")
-                                s4_first_half_flag = True
+                            temp_dict = dict(Counter(s4_history[-10:]))
+                            if(temp_dict["Resetting"] > 3):
+                                s4_history = []
+                                s4_turn_count += 1
+                                print(f"Finished Turn: {s4_turn_count}")
 
-                            # passed halfway turn
-                            elif (wrench_det[0] > s4_prev_wrench_xmin) and (wrench_det[3] < s4_prev_wrench_ymax):
-                                print("second_half")
-                                s4_second_half_flag = True
+                        # use for turn calibrating
+                        a = dict(Counter(s4_history))
+                        # print(a)
 
-                            if wrench_det[3] > s4_prev_wrench_ymax:
-                                print("turn complete")
-                        
                         s4_prev_wrench_xmin = wrench_det[0]
+                        s4_prev_wrench_ymin = wrench_det[1]
                         s4_prev_wrench_ymax = wrench_det[3]
 
-                # print(f'FirstHalfFlag: {s4_first_half_flag}, SecondHalfFlag: {s4_second_half_flag}, TurnCount: {s4_turn_count}')
-                if s4_turn_count >= 1999:
+                # Final turn didn't count
+                if wrench_count == 0 and a['Turning'] > 0:
+                    s4_turn_count += 1
+                
+                if s4_turn_count == 3:
                     gui.update_substep(4)
-                    sub_conditions[4] = True     
+                    sub_conditions[4] = True  
+
+  
 
             # hand is out of field
             if not sub_conditions[5] and sub_conditions[4] == True:
@@ -914,7 +903,7 @@ class DisplayGUI:
                             '3.2 - Detect Hands',
                             '3.3 - Detect Hand Overlap',
                             '3.4 - Complete Overlap of Wrench over Double Flat Bottom Bracket',
-                            '3.5 - Tighten by Rotation and Complete overlap Detected'
+                            '3.5 - Tighten by THREE Rotations and Complete overlap Detected',
                             '3.6 - Hand Out of Field']
             
             if i == 3:
