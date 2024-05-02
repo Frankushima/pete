@@ -34,6 +34,22 @@ gui = None
 flag = False
 cv_queue = queue.Queue()
 
+class_index = {
+    'adjustablemonkeywrench': 0,
+    'monkeywrench': 1,
+    'allenkey': 2,
+    'doubleflatswrench': 3,
+    'hand': 4,
+    'pedallockringwrench': 5,
+    'crankremover': 6,
+    'spindle': 7,
+    'doubleFlatsBottomBracket': 8,
+    'crankArmNonChainSide': 9,
+    'bolt': 10,
+    'pedal': 11,
+    'crankArm': 12
+}
+
 def detect(save_img=False):
     global gui, flag, cv_queue
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
@@ -260,6 +276,8 @@ def decision_logic():
         s5_prev_dist_Spindle = -math.inf
         s5_trend_Spindle = logic_tools.Trendline.INITIALIZE
 
+
+        # Detections Expected: Left Hand, Right Hand, Spindle
         sub_conditions= [False for i in range(7)]
         while current_step == 0:
             data = cv_queue.get()
@@ -268,31 +286,27 @@ def decision_logic():
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
-                if hand_count > 1:
-                    # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                if hand_count >= 1:
                     gui.update_substep(0)
                     sub_conditions[0] = True
 
             # SUB 1 : is there a spindle? (index = 7)
             if not sub_conditions[1] and sub_conditions[0] == True:
-                spindle_count, spindle_det = logic_tools.find_class(data, 7)
+                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
                 if spindle_count == 1:
-                    # procedure[current_step].update_description(u'Found Spindle 👍')
                     gui.update_substep(1)
                     sub_conditions[1] = True
             
             # SUB 2 : are they overlapped? hand holding spindle? 
             if not sub_conditions[2] and sub_conditions[1] == True:
                 over_count = 0  
-
                 if num_class_detected > 1:
                     over_count, over_det = logic_tools.find_overlapping(data)
                     if over_count == 1:
                         single_overlap_pair = over_det[0]
                         # if the overlapping is between spindle and hand
-                        if ((single_overlap_pair[0][5] == 7 and single_overlap_pair[1][5] == 4) or 
-                        (single_overlap_pair[0][5] == 4 and single_overlap_pair[1][5] == 7)):
-                            # procedure[current_step].update_description(u'Hand holding Spindle 👍')
+                        if ((single_overlap_pair[0][5] == class_index['spindle'] and single_overlap_pair[1][5] == class_index['hand']) or 
+                        (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['spindle'])):
                             gui.update_substep(2)
                             sub_conditions[2] = True
 
@@ -306,7 +320,7 @@ def decision_logic():
                 if num_class_detected > 1:
                     hand_count, hands_det = logic_tools.find_hands(data)
                     over_count, over_det = logic_tools.find_overlapping(data)
-                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
+                    spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
 
                     if hand_count == 2 and spindle_count == 1:
                         L_hand_det, R_hand_det = logic_tools.RL_hands(hands_det)
@@ -341,7 +355,6 @@ def decision_logic():
 
                         # print(f"Left Trend: {s3_trend_L_Spindle} Right Trend: {s3_trend_R_Spindle}")
                     if hand_count == 1 and spindle_count == 1 and s3_trend_R_Spindle == logic_tools.Trendline.INCREASING and s3_trend_L_Spindle == logic_tools.Trendline.DECREASING: 
-                        # procedure[current_step].update_description(u'Passed it to Left Hand 🏀')
                         gui.update_substep(3)
                         sub_conditions[3] = True
 
@@ -354,9 +367,8 @@ def decision_logic():
                     if over_count == 1:
                         single_overlap_pair = over_det[0]
                         # if the overlapping is between spindle and hand
-                        if ((single_overlap_pair[0][5] == 7 and single_overlap_pair[1][5] == 4) or 
-                        (single_overlap_pair[0][5] == 4 and single_overlap_pair[1][5] == 7)):
-                            # procedure[current_step].update_description(u'Spindle on Left Hand😎')
+                        if ((single_overlap_pair[0][5] == class_index['spindle'] and single_overlap_pair[1][5] == class_index['hand']) or 
+                        (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['spindle'])):
                             gui.update_substep(4)
                             sub_conditions[4] = True
                 
@@ -367,7 +379,7 @@ def decision_logic():
                 if num_class_detected > 1:
                     hand_count, hands_det = logic_tools.find_hands(data)
                     over_count, over_det = logic_tools.find_overlapping(data)
-                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
+                    spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
                             
                     if hand_count == 1 and spindle_count == 1:
                         spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
@@ -386,16 +398,14 @@ def decision_logic():
 
                 
                 if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
-                    # procedure[current_step].update_description(u'Spindle leave L-Hand 😭')
                     gui.update_substep(5)
                     sub_conditions[5] = True
 
             # SUB 6 : no overlap spingle left behind
             if not sub_conditions[6] and sub_conditions[5] == True:
-                spindle_count, spindle_det = logic_tools.find_class(data, 7)
+                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
 
                 if spindle_count == 1 and num_class_detected == 1:
-                    # procedure[current_step].update_description(u'Spindle Alone 😴')
                     gui.update_substep(6)
                     sub_conditions[6] = True
 
@@ -405,7 +415,8 @@ def decision_logic():
 
             # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
         
-        sub_conditions = [False for i in range(3)]
+        # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
+        sub_conditions = [False for i in range(4)]
         while current_step == 1:
             data = cv_queue.get()
             num_class_detected = len(data)
@@ -413,26 +424,35 @@ def decision_logic():
             # SUB 0 : is there a hand?
             if not sub_conditions[0]:
                 hand_count, hands_det = logic_tools.find_hands(data)
-                if hand_count > 1:
-                    # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                if hand_count >= 1:
                     gui.update_substep(0)
                     sub_conditions[0] = True
 
             # SUB 1 : is there a spindle?
             if not sub_conditions[1] and sub_conditions[0] == True:
-                spingle_count, _ = logic_tools.find_class(data, 7)
-                if spindle_count == 1:
-                    # procedure[current_step].update_description(u'Found Spindle')
+                double_flat_bb_count, _ = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+                if double_flat_bb_count == 1:
                     gui.update_substep(1)
                     sub_conditions[1] = True
 
             # SUB 2 : is there a double flat bottom bracket?
             if not sub_conditions[2] and sub_conditions[1] == True:
-                bolt_count, _ = logic_tools.find_class(data, 8)
-                if bolt_count == 1:
-                    # procedure[current_step].update_description(u'Found Double flat bottom bracket👍')
+                spindle_count, _ = logic_tools.find_class(data, class_index['spindle'])
+                if spindle_count == 1:
                     gui.update_substep(2)
                     sub_conditions[2] = True
+
+            # SUB 3: single hand holding doubleflat bottom bracket
+            if not sub_conditions[3] and sub_conditions[2] == True:
+                over_count = 0  
+                if num_class_detected > 1:
+                    over_count, over_det = logic_tools.find_overlapping(data)
+                    if over_count == 1:
+                        single_overlap_pair = over_det[0]
+                        if ((single_overlap_pair[0][5] == class_index['doubleFlatsBottomBracket'] and single_overlap_pair[1][5] == class_index['hand']) or 
+                        (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['doubleFlatsBottomBracket'])):
+                            gui.update_substep(2)
+                            sub_conditions[3] = True
 
             # if spindle + bolt + hand overlap --> passed
 
@@ -442,22 +462,48 @@ def decision_logic():
 
             
             if all(sub_conditions):
-                # print("Step 2 Done")
+                print("Step 2 Done")
                 gui.mark_step_done(DONE)
         
-
-        sub_conditions= [False for i in range(1)]
+        # Detections Expected: Left Hand, Right Hand, Double-flats Wrench, (DoubleFlatBottomBracket), (Spindle)
+        sub_conditions= [False for i in range(3)]
         while current_step == 2:
             data = cv_queue.get()
             num_class_detected = len(data)
             
-            # find hand
+            # find double flat wrench
             if not sub_conditions[0]:
-                time.sleep(3)
-                sub_conditions[0] = True
-            # find spindle/bottom bracket
+                double_flat_wrench_count, _ = logic_tools.find_class(data, class_index['doubleflatswrench'])
+                if double_flat_wrench_count == 1:
+                    gui.update_substep(0)
+                    sub_conditions[0] = True
 
-            # find wrench
+            # find hands
+            if not sub_conditions[1] and sub_conditions[0] == True:
+                hand_count, hands_det = logic_tools.find_hands(data)
+                if hand_count > 1:
+                    gui.update_substep(1)
+                    sub_conditions[1] = True
+
+            # overlap hands and doubleflatwrench
+            if not sub_conditions[2] and sub_conditions[1] == True:
+                # over_count, over_det = logic_tools.find_overlapping(data)
+                # if over_count == 1:
+                #     single_overlap_pair = over_det[0]
+                #     # if the overlapping is between spindle and hand
+                #     if ((single_overlap_pair[0][5] == class_index['doubleflatswrench'] and single_overlap_pair[1][5] == class_index['hand']) or 
+                #     (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['doubleflatswrench'])):
+                #         gui.update_substep(2)
+                #         sub_conditions[2] = True
+                
+                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
+                wrench_count, wrench_det = logic_tools.find_class(data, class_index['doubleflatswrench'])
+
+                for hand in hand_det:
+                    overlapping, _ = logic_tools.is_overlapping(hand, wrench_det[0])
+                    if overlapping:
+                        gui.update_substep(2)
+                        sub_conditions[2] = True
 
             # correct overlap increase/decrease
 
@@ -467,22 +513,39 @@ def decision_logic():
 
 
             if all(sub_conditions):
-                # print("Step 3 Done")
+                print("Step 3 Done")
                 gui.mark_step_done(DONE)
 
-        sub_conditions= [False for i in range(1)]
+        # Detections Expected: Left Hand, Right Hand, CrankArm, (DoubleFlatBottomBracket), (Spindle)
+        sub_conditions= [False for i in range(3)]
         while current_step == 3:
             data = cv_queue.get()
             num_class_detected = len(data)
             
-            # find hand
-            if not sub_conditions[0]:
-                time.sleep(5)
-                sub_conditions[0] = True
-
             # find crank arm
-        
+            if not sub_conditions[0]:
+                double_flat_wrench_count, _ = logic_tools.find_class(data, class_index['crankArm'])
+                if double_flat_wrench_count == 1:
+                    gui.update_substep(0)
+                    sub_conditions[0] = True
+
+            # find hand
+            if not sub_conditions[1] and sub_conditions[0] == True:
+                hand_count, hands_det = logic_tools.find_hands(data)
+                if hand_count > 1:
+                    gui.update_substep(1)
+                    sub_conditions[1] = True
+
             # find correct overlap
+            if not sub_conditions[2] and sub_conditions[1] == True:
+                over_count, over_det = logic_tools.find_overlapping(data)
+                if over_count == 1:
+                    single_overlap_pair = over_det[0]
+                    # if the overlapping is between spindle and hand
+                    if ((single_overlap_pair[0][5] == class_index['crankArm'] and single_overlap_pair[1][5] == class_index['hand']) or 
+                    (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['crankArm'])):
+                        gui.update_substep(2)
+                        sub_conditions[2] = True
 
             # correct location
 
@@ -492,12 +555,29 @@ def decision_logic():
             # correct increase/decrease
 
             if all(sub_conditions):
-                # print("Step 4 Done")
+                print("Step 4 Done")
                 gui.mark_step_done(DONE)
 
-        while current_step >= 4:
+        # Detections Expected: Left Hand, Right Hand, Bolt, CrankArm
+        while current_step == 4:
             time.sleep(5)
+            print("Step 5 Done")
             gui.mark_step_done(DONE)    
+
+        
+        # current_step = 5
+        # Detections Expected: Left Hand, Right Hand, Pedal, CrankArm, Bolt
+        while current_step == 5:
+            time.sleep(5)
+            print("Step 6 Done")
+            gui.mark_step_done(DONE)   
+
+        # current_step = 6
+        # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
+        while current_step == 6:
+            time.sleep(5)
+            print("Step 7 Done")
+            gui.mark_step_done(DONE)   
 
 
 class DisplayGUI:
@@ -651,10 +731,10 @@ class DisplayGUI:
 
         for i in range(0, 7):
             if i == 0:
-                title = f"Step {i+1}, Spindle IN!"
+                title = f"Step {i+1}, Spindle Installation"
                 description = "Putting Spindle In!"
                 status = NOT_DONE
-                substeps = ['1.1 - Detect Hands',
+                substeps = ['1.1 - Detect Hand',
                             '1.2 - Detect Spindle',
                             '1.3 - Hand holding Spindle',
                             '1.4 - Passed to Left Hand',
@@ -663,39 +743,44 @@ class DisplayGUI:
                             '1.7 - Spindle Alone']
 
             if i == 1:
-                title = f"Step {i+1}, Double Flat Bottom Bracket IN!"
+                title = f"Step {i+1}, Bottom Bracket Installation and Tightening"
                 description = "you got this."
                 status = NOT_DONE
                 substeps = ['2.1 - Detect Hands',
-                            '2.2 - Detect Spindle',
-                            '2.3 - Detect double flat bottom bracket']
+                            '2.2 - Detect double flat bottom bracket',
+                            '2.3 - Detect spindle',
+                            '2.4 - Single Hand Holding Double Flat Bottom Bracket']
             
             if i == 2:
-                title = f"Step {i+1}, Double Flat Wrench SPIN!"
+                title = f"Step {i+1}, Tighten with Double Flat Wrench"
                 description = "you got this."
                 status = NOT_DONE
-                substeps = []
+                substeps = ['3.1 - Detect Double Flat Wrench',
+                            '3.2 - Detect Hands',
+                            '3.3 - Detect Hand Overlap']
             
             if i == 3:
-                title = f"Step {i+1}, Crank Arm IN!"
+                title = f"Step {i+1}, Crank Arm Installation"
                 description = "you got this."
                 status = NOT_DONE
-                substeps = []
+                substeps = ['4.1 - Detect Crank Arm',
+                            '4.2 - Detect Hands',
+                            '4.3 - Detect Hands Overlap']
 
             if i == 4:
-                title = f"Step {i+1}, Little Bolt! IN!"
+                title = f"Step {i+1}, Bolt Installation"
                 description = "you got this."
                 status = NOT_DONE
                 substeps = []
 
             if i == 5:
-                title = f"Step {i+1}, PEDALLLL IN!"
+                title = f"Step {i+1}, Pedal Installation"
                 description = "you got this."
                 status = NOT_DONE
                 substeps = []
 
             if i == 6:
-                title = f"Step {i+1}, Pedal Locking Wrench IN!"
+                title = f"Step {i+1}, Pedal Tightening with Crank Arm"
                 description = "you got this."
                 status = NOT_DONE
                 substeps = []

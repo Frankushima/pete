@@ -25,6 +25,22 @@ from enum import Enum
 
 import math
 
+class_index = {
+    'adjustablemonkeywrench': 0,
+    'monkeywrench': 1,
+    'allenkey': 2,
+    'doubleflatswrench': 3,
+    'hand': 4,
+    'pedallockringwrench': 5,
+    'crankremover': 6,
+    'spindle': 7,
+    'doubleFlatsBottomBracket': 8,
+    'crankArmNonChainSide': 9,
+    'bolt': 10,
+    'pedal': 11,
+    'crankArm': 12
+}
+
 class Trendline(Enum):
     INITIALIZE = -1
     DECREASING = 0
@@ -62,7 +78,7 @@ def find_hands(det):
 
     for each_det in det:
         # index of 4 is currently hand
-        if each_det[5] == 4:
+        if each_det[5] == class_index['hand']:
             count += 1
             hands.append(each_det)
 
