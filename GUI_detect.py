@@ -416,7 +416,9 @@ def decision_logic():
             # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
         
         # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
-        sub_conditions = [False for i in range(4)]
+        # Both Hand hold Bracket
+        # Single Hand Tighten
+        sub_conditions = [False for i in range(6)]
         while current_step == 1:
             data = cv_queue.get()
             num_class_detected = len(data)
@@ -428,31 +430,69 @@ def decision_logic():
                     gui.update_substep(0)
                     sub_conditions[0] = True
 
-            # SUB 1 : is there a spindle?
+            # SUB 1 : is there a doubleflatbottombracket?
             if not sub_conditions[1] and sub_conditions[0] == True:
                 double_flat_bb_count, _ = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
                 if double_flat_bb_count == 1:
                     gui.update_substep(1)
                     sub_conditions[1] = True
 
-            # SUB 2 : is there a double flat bottom bracket?
+            # SUB 2 : is there a spindle?
             if not sub_conditions[2] and sub_conditions[1] == True:
                 spindle_count, _ = logic_tools.find_class(data, class_index['spindle'])
                 if spindle_count == 1:
                     gui.update_substep(2)
                     sub_conditions[2] = True
 
-            # SUB 3: single hand holding doubleflat bottom bracket
+            # SUB 3: hand holding doubleflat bottom bracket
             if not sub_conditions[3] and sub_conditions[2] == True:
-                over_count = 0  
-                if num_class_detected > 1:
-                    over_count, over_det = logic_tools.find_overlapping(data)
-                    if over_count == 1:
-                        single_overlap_pair = over_det[0]
-                        if ((single_overlap_pair[0][5] == class_index['doubleFlatsBottomBracket'] and single_overlap_pair[1][5] == class_index['hand']) or 
-                        (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['doubleFlatsBottomBracket'])):
-                            gui.update_substep(2)
-                            sub_conditions[3] = True
+                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
+                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+
+                for hand in hand_det:
+                    overlapping, _ = logic_tools.is_overlapping(hand, double_flat_bb_det[0])
+                    
+                if overlapping:
+                        gui.update_substep(3)
+                        sub_conditions[3] = True
+
+            # SUB 4: bottom bracket completely covering spindle
+            if not sub_conditions[4] and sub_conditions[3] == True:
+                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
+                    
+                if double_flat_bb_count == 1 and spindle_count ==  1:
+                    double_flat_bb_det = double_flat_bb_det[0]
+                    spindle_det = spindle_det[0]
+
+                if double_flat_bb_count and spindle_count:
+                    complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
+                    print(complete_overlap)
+                    if complete_overlap:
+                        gui.update_substep(4)
+                        sub_conditions[4] = True
+
+            # SUB 5: right hand totally covering double flat bottom bracket
+            if not sub_conditions[5] and sub_conditions[4] == True:
+                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
+                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
+
+                if hand_count > 1:
+                    _, R_hand = logic_tools.RL_hands(hand_det)
+
+                else:
+                    R_hand = hand_det[0]
+                    
+                if double_flat_bb_count == 1:
+                    double_flat_bb_det = double_flat_bb_det[0]
+
+                if double_flat_bb_count:
+                    complete_overlap = logic_tools.complete_overlap(R_hand, double_flat_bb_det)
+                    if complete_overlap:
+                        gui.update_substep(5)
+                        sub_conditions[5] = True
+
+            
 
             # if spindle + bolt + hand overlap --> passed
 
@@ -749,7 +789,9 @@ class DisplayGUI:
                 substeps = ['2.1 - Detect Hands',
                             '2.2 - Detect double flat bottom bracket',
                             '2.3 - Detect spindle',
-                            '2.4 - Single Hand Holding Double Flat Bottom Bracket']
+                            '2.4 - Single Hand Holding Double Flat Bottom Bracket',
+                            '2.5 - Detect Complete Overlap of Double Flat Bottom Bracket over Spindle',
+                            '2.6 - Detect Right Hand completely over Double Flat Bottom Bracket']
             
             if i == 2:
                 title = f"Step {i+1}, Tighten with Double Flat Wrench"

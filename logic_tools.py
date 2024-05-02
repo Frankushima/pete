@@ -137,3 +137,61 @@ def is_overlapping(detA, detB):
         return True, iou
     else:
         return False, iou
+
+def overlap_by_reference(detA, detB):
+    # reference is detB
+    detA_xmin, detA_ymin, detA_xmax, detA_ymax = detA[:4]
+    detB_xmin, detB_ymin, detB_xmax, detB_ymax = detB[:4]
+
+    # confirm overlap
+    overlapping, iou =  is_overlapping(detA, detB)
+    if not overlapping:
+        return
+    
+    # get detB area
+    detB_width = detB_xmax - detB_xmin
+    detB_height = detA_ymax - detA_ymin
+
+    detB_area = detB_width*detB_height
+
+    # get overlapping area
+    xA = max(detA_xmin, detB_xmin)
+    yA = max(detA_ymin, detB_ymin)
+    xB = min(detA_xmax, detB_xmax)
+    yB = min(detA_ymax, detB_ymax)
+
+    overlap_area = (xB-xA) * (yB-yA)
+
+    print(f'Overlap_area = {overlap_area}, detB_area = {detB_area}')
+
+    return min(overlap_area/detB_area, 1)
+
+
+# complete overlap is seeing if detA completely cover detB
+def complete_overlap(detA, detB):
+    # reference is detB
+    detA_xmin, detA_ymin, detA_xmax, detA_ymax = detA[:4]
+    detB_xmin, detB_ymin, detB_xmax, detB_ymax = detB[:4]
+
+    # confirm overlap
+    overlapping, iou =  is_overlapping(detA, detB)
+    if not overlapping:
+        return
+
+    if (detB_xmin >= detA_xmin and
+        detB_ymin >= detA_ymin and
+        detB_xmax <= detA_xmax and
+        detB_ymax <= detA_ymax):
+        return True
+    
+    else:
+        return False
+
+
+
+
+    
+    
+
+
+    
