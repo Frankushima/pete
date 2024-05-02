@@ -420,7 +420,7 @@ def decision_logic():
 
             # SUB 1 : is there a spindle?
             if not sub_conditions[1] and sub_conditions[0] == True:
-                spingle_count, _ = logic_tools.find_class(data, 7)
+                spindle_count, _ = logic_tools.find_class(data, 7)
                 if spindle_count == 1:
                     # procedure[current_step].update_description(u'Found Spindle')
                     gui.update_substep(1)
@@ -455,6 +455,7 @@ def decision_logic():
             if not sub_conditions[0]:
                 time.sleep(3)
                 sub_conditions[0] = True
+                
             # find spindle/bottom bracket
 
             # find wrench
@@ -481,7 +482,7 @@ def decision_logic():
                 sub_conditions[0] = True
 
             # find crank arm
-        
+            
             # find correct overlap
 
             # correct location
@@ -652,7 +653,8 @@ class DisplayGUI:
         for i in range(0, 7):
             if i == 0:
                 title = f"Step {i+1}, Spindle IN!"
-                description = "Putting Spindle In!"
+                description = "Put the spindle (rod-like object in left image) into the axle hole \
+                    \nOnce complete, it should look like the image on the right"
                 status = NOT_DONE
                 substeps = ['1.1 - Detect Hands',
                             '1.2 - Detect Spindle',
@@ -661,46 +663,56 @@ class DisplayGUI:
                             '1.5 - Spindle on Left Hand',
                             '1.6 - Spindle leaves Left Hand',
                             '1.7 - Spindle Alone']
+                pictures = ['step1.1.png', 'step1.2.png']
 
             if i == 1:
                 title = f"Step {i+1}, Double Flat Bottom Bracket IN!"
-                description = "you got this."
+                description = "Place the Double Flat Bottom Bracket into the axle hole \
+                    \nThen, turn it clockwise with you fingers to tighten it"
                 status = NOT_DONE
                 substeps = ['2.1 - Detect Hands',
                             '2.2 - Detect Spindle',
                             '2.3 - Detect double flat bottom bracket']
-            
+                pictures = ['step2.png']
+                
             if i == 2:
                 title = f"Step {i+1}, Double Flat Wrench SPIN!"
-                description = "you got this."
+                description = "Use the Double Flat Wrench to tighten the Double Flat Bottom Bracket by turning it clockwise"
                 status = NOT_DONE
                 substeps = []
+                pictures = ['step3.png']
             
             if i == 3:
                 title = f"Step {i+1}, Crank Arm IN!"
-                description = "you got this."
+                description = "Place the Crank Arm into the axle hole"
                 status = NOT_DONE
                 substeps = []
+                pictures = ['step4.png']
 
             if i == 4:
                 title = f"Step {i+1}, Little Bolt! IN!"
-                description = "you got this."
+                description = "Secure the Crank Arm with the little bolt (bolt in left image) by placing it into the axle hole\
+                    \n Then, turn it clockwise with your fingers to tighten it"
                 status = NOT_DONE
                 substeps = []
+                pictures = ['step5.1.png', 'step5.2.png']
 
             if i == 5:
                 title = f"Step {i+1}, PEDALLLL IN!"
-                description = "you got this."
+                description = "Place the pedal into the other side of the Crank Arm \
+                \nThen, tighten the bolt on the other side of the pedal to secure it"
                 status = NOT_DONE
                 substeps = []
+                pictures = ['step6.png']
 
             if i == 6:
                 title = f"Step {i+1}, Pedal Locking Wrench IN!"
-                description = "you got this."
+                description = "Use the Pedal Locking Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = []
+                pictures = ['step7.1.png', 'step7.2.png']
             
-            s = Step(i, title, description, status, substeps)
+            s = Step(i, title, description, status, substeps, pictures)
 
             procedure.append(s)
 
