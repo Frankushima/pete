@@ -629,6 +629,7 @@ def decision_logic():
                 # Final turn didn't count
                 if wrench_count == 0 and a['Turning'] > 0:
                     s4_turn_count += 1
+                    print(f"Finished Turn: {s4_turn_count}")
                 
                 if s4_turn_count == 3:
                     gui.update_substep(4)
