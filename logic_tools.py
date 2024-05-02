@@ -182,7 +182,7 @@ class Persistor:
     def verify(self):
         return self.counter >= self.condition
 
-    def reset(self, hard=True):
-        if hard and np.random.random() < 0.8:
+    def reset(self):
+        if np.random.random() < 0.8:
             self.counter = 0
             print(f"[{self.name}] Disrupted ({self.counter}/{self.condition}).")

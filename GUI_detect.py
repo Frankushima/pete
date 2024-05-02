@@ -234,7 +234,7 @@ def sensor_detect():
         if not sensor_in_use.is_set():
             print("", end="")
         else:
-            print("sensor in use = ================================================")
+            # print("sensor in use = ================================================")
 
             # Read in + a lil EWMA
             if sample == 0:
@@ -253,10 +253,11 @@ def sensor_detect():
             data = {
                 'rotating': is_rotating,
                 'degrees': sum_sd,
-                'num_rotations': sum_sd // 360,
+                'num_rotations': int(sum_sd / 360),
             }
 
             sensor_queue.put(data)
+            time.sleep(0.1) # a bit delay to prevent thread dying
 
 def decision_logic():
     global procedure, current_step, gui, cv_queue
@@ -629,7 +630,7 @@ def step7_validator():
     in_progress_stage_satisfied = False
     num_rotations = 0
     gui.update_substep(1 + num_rotations)
-    condition_persistor = Persistor(frames=5, condition_name="1 rotation")
+    condition_persistor = Persistor(frames=10, condition_name="1 rotation")
     MIN_ROTATION = 3
     global sensor_queue, sensor_in_use
     while not in_progress_stage_satisfied:
@@ -642,30 +643,35 @@ def step7_validator():
             continue
 
         if not sensor_in_use.is_set(): sensor_in_use.set()
-        print("Sensor set")
+        # print("Sensor set")
 
         pedal = data[data[:, 5] == PEDAL][0]
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
         sensor_data = sensor_queue.get()
-        print(sensor_data, "\n")
+        # print(sensor_data, "\n")
         if sensor_data['rotating']:
-            print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
+            # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
             # takes max to determine the iou of the most likely hand holding wrench (???)
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
 
-            if sensor_data['num_rotations'] < MIN_ROTATION and condition_persistor.verify():
-                # print("one rotation completed")
+            if sensor_data['num_rotations'] != num_rotations:
                 gui.update_substep(1 + sensor_data['num_rotations'])
-                condition_persistor.reset(False)
+                num_rotations = sensor_data['num_rotations']
+
+            if num_rotations < MIN_ROTATION and condition_persistor.verify():
+                # one rotation completed. Reset Persistor for next rotation
+                condition_persistor.reset()
 
             if pedal_pedal_lockring_iou > 0.1 and hand_pedal_lockring_iou > 0:
                 condition_persistor.persist()
+                # TODO: when to reset on error?
             else:
                 continue
-            print(f"num rotations = {sensor_data['num_rotations']}")
+
+            print(f"num rotations = {num_rotations}")
             if sensor_data['num_rotations'] >= MIN_ROTATION and condition_persistor.verify():
                 in_progress_stage_satisfied = True
 
@@ -950,6 +956,8 @@ class DisplayGUI:
             self.substep_list.append(temp)
 
     def update_substep(self, index):
+        if self.substep_list[index]['text'][-1] == "\u2713":
+            return
         self.substep_list[index]['fg'] = substep_complete_text_color
         self.substep_list[index]['text'] += " \u2713 "
 
