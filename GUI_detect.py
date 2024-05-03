@@ -232,7 +232,7 @@ def sensor_detect():
     while not terminate.is_set():
         # if not using sensor tool, simply ignore data
         if not sensor_in_use.is_set():
-            print("", end="")
+            time.sleep(1)
         else:
             # print("sensor in use = ================================================")
 
@@ -986,18 +986,17 @@ class DisplayGUI:
         detect_thread.daemon = True
         detect_thread.start()
 
-        # Sensor  ===================================
-        sensor_thread = threading.Thread(target=sensor_detect, args=[])
-        sensor_thread.daemon = True
-        sensor_thread.start()
-        print("started sensor thread")
-
         while not flag:
             time.sleep(1)
         
         self.loading_frame.destroy()
                 
         self.procedure_tracking_setup(self.app)
+
+        # Sensor  ===================================
+        sensor_thread = threading.Thread(target=sensor_detect, args=[])
+        sensor_thread.daemon = True
+        sensor_thread.start()
     
     def _update_loading_gif(self):
         
