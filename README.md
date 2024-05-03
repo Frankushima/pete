@@ -45,7 +45,7 @@ raspivid -t 0 -h 972 -w 1296 -fps 25 -hf -b 2000000 -o - | gst-launch-1.0 -v fds
 
 - Launch this script:
 ```bash
-python GUI_detect.py --weights=Demo_Only_B40.pt --source=test_videos/step7.mov --nosave --view-img --no-trace
+python GUI_detect.py --weights=Demo_Only_B40.pt --source=test_videos/bottomBracketInstall.MOV --nosave --view-img --no-trace
 ```
 
 Quirks with this setup:
@@ -69,9 +69,3 @@ HACK: hardcoded OpenCV flags
 - Fixed exiting window not exiting program bug
 - Added pictures to steps (WIP)
 - Fixed gitignore to make sure stuff is downloaded correctly
-
-
-## Thoughts
-
-- Could have a "search and match" sequence for the substeps within a step. 
-  - Like a state machine? But isn't this already what it's doing right now?

@@ -1044,10 +1044,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # parser.add_argument('--weights', nargs='+', type=str, default='VAR_B40E40_Transfer_Fine-Tune_0-0001.pt', help='model.pt path(s)')
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/step7.mov',
+    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstall.MOV',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
-    parser.add_argument('--conf-thres', type=float, default=0.4, help='object confidence threshold')
+    parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--view-img', default='True', action='store_true', help='display results')
