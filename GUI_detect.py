@@ -635,7 +635,6 @@ def step7_validator():
     """
     in_progress_stage_satisfied = False
     num_rotations = 0
-    gui.update_substep(1 + num_rotations)
     condition_persistor = Persistor(frames=10, condition_name="1 rotation")
     MIN_ROTATION = 3
     global sensor_queue, sensor_in_use
@@ -664,7 +663,7 @@ def step7_validator():
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
 
             if sensor_data['num_rotations'] != num_rotations:
-                gui.update_substep(1 + sensor_data['num_rotations'])
+                gui.update_substep(sensor_data['num_rotations'])
                 num_rotations = sensor_data['num_rotations']
 
             if num_rotations < MIN_ROTATION and condition_persistor.verify():
@@ -897,10 +896,9 @@ class DisplayGUI:
                 description = "Use the Pedal Locking Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = ['7.1 - Pedal is placed in bolted-down crank arm',
-                            '7.2 - Secure pedal using pedal wrench (rotation 0/3)',
-                            '7.3 - Secure pedal using pedal wrench (rotation 1/3)',
-                            '7.4 - Secure pedal using pedal wrench (rotation 2/3)',
-                            '7.5 - Secure pedal using pedal wrench (rotation 3/3)']
+                            '7.2 - Secure pedal using pedal wrench (rotation 1/3)',
+                            '7.3 - Secure pedal using pedal wrench (rotation 2/3)',
+                            '7.4 - Secure pedal using pedal wrench (rotation 3/3)']
                 pictures = ['step7.1.png', 'step7.2.png']
 
             s = Step(i, title, description, status, substeps, pictures)
