@@ -27,6 +27,22 @@ from enum import Enum
 
 import math
 
+class_index = {
+    'adjustablemonkeywrench': 0,
+    'monkeywrench': 1,
+    'allenkey': 2,
+    'doubleflatswrench': 3,
+    'hand': 4,
+    'pedallockringwrench': 5,
+    'crankremover': 6,
+    'spindle': 7,
+    'doubleFlatsBottomBracket': 8,
+    'crankArmNonChainSide': 9,
+    'bolt': 10,
+    'pedal': 11,
+    'crankArm': 12
+}
+
 class Trendline(Enum):
     INITIALIZE = -1
     DECREASING = 0
@@ -64,7 +80,7 @@ def find_hands(det):
 
     for each_det in det:
         # index of 4 is currently hand
-        if each_det[5] == 4:
+        if each_det[5] == class_index['hand']:
             count += 1
             hands.append(each_det)
 
@@ -123,6 +139,67 @@ def is_overlapping(detA, detB):
         return True, iou
     else:
         return False, iou
+
+# in yolov7 higher y value means lower position in canvas
+def overlap_by_reference(detA, detB):
+    # reference is detB
+    detA_xmin, detA_ymin, detA_xmax, detA_ymax = detA[:4]
+    detB_xmin, detB_ymin, detB_xmax, detB_ymax = detB[:4]
+
+    # confirm overlap
+    overlapping, iou =  is_overlapping(detA, detB)
+    if not overlapping:
+        return
+
+    # get detB area
+    detB_width = detB_xmax - detB_xmin
+    detB_height = detA_ymax - detA_ymin
+
+    detB_area = detB_width*detB_height
+
+    # get overlapping area
+    xA = max(detA_xmin, detB_xmin)
+    yA = max(detA_ymin, detB_ymin)
+    xB = min(detA_xmax, detB_xmax)
+    yB = min(detA_ymax, detB_ymax)
+
+    overlap_area = (xB-xA) * (yB-yA)
+
+    print(f'Overlap_area = {overlap_area}, detB_area = {detB_area}')
+
+    return overlap_area/detB_area
+
+
+# complete overlap is seeing if detA completely cover detB
+def complete_overlap(detA, detB):
+    # reference is detB
+    detA_xmin, detA_ymin, detA_xmax, detA_ymax = detA[:4]
+    detB_xmin, detB_ymin, detB_xmax, detB_ymax = detB[:4]
+
+    # confirm overlap
+    overlapping, iou =  is_overlapping(detA, detB)
+    if not overlapping:
+        return
+
+    if (detB_xmin >= detA_xmin and
+        detB_ymin >= detA_ymin and
+        detB_xmax <= detA_xmax and
+        detB_ymax <= detA_ymax):
+        return True
+
+    else:
+        return False
+
+def rotation_detect():
+    return
+
+
+
+
+
+
+
+
 
 
 def bbox_intersection(box1, box2):
