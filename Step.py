@@ -3,13 +3,14 @@ import tkinter as tk
 from PIL import Image, ImageTk
 
 class Step:
-    def __init__(self, index, title, description, status, substeps):
+    def __init__(self, index, title, description, status, substeps, pictures):
         self.title = title
         self.index = index
         self.description = description
         self.isFocus = False
         self.status = status
         self.substeps = substeps
+        self.pictures = pictures
 
         # GUI Frames
         self.step_frame = None
@@ -19,6 +20,7 @@ class Step:
         self.description_label = None
         self.title_frame = None
         self.index_label = None
+        self.picture_list = []
 
     def build(self, procedure_list):
         color = colors[self.status]
@@ -40,12 +42,20 @@ class Step:
                                    font=("Arial", 15),
                                    padx=20, pady=5, anchor='w', justify="left")
         
+        # HACK: text wrap is hardcoded
+        self.info_frame.configure(wraplength=750)
+        
         self.image_frame = tk.Label(self.step_frame, bg=color['bg'], pady=5)
         
-        # load helper image - TODO: add arguments for image and make it scale, this is currently hardcoded to be a cat 
-        image = ImageTk.PhotoImage(Image.open('cat.png').resize((200,100)))
-        self.image_frame.config(image=image)
-        self.image_frame.image = image
+        # HACK: image size is currently hardcoded
+        for i,p in enumerate(self.pictures): 
+            temp = tk.Label(self.image_frame,bg=color['bg'], pady=5)
+            temp.grid(row=0,column=i)
+            image = ImageTk.PhotoImage(Image.open('step_previews/' + p).resize((400,200)))
+            temp.config(image=image)
+            temp.image = image
+            
+            self.picture_list.append(temp)
         
         # pack into frame
         self.title_frame.pack(fill="both", expand=False)
