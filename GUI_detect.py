@@ -901,8 +901,9 @@ class DisplayGUI:
                             '7.3 - Secure pedal using pedal wrench (rotation 1/3)',
                             '7.4 - Secure pedal using pedal wrench (rotation 2/3)',
                             '7.5 - Secure pedal using pedal wrench (rotation 3/3)']
+                pictures = ['step7.1.png', 'step7.2.png']
 
-            s = Step(i, title, description, status, substeps)
+            s = Step(i, title, description, status, substeps, pictures)
 
             procedure.append(s)
 
