@@ -657,7 +657,7 @@ def decision_logic():
                 gui.mark_step_done(DONE)
 
         # Detections Expected: Left Hand, Right Hand, CrankArm, (DoubleFlatBottomBracket), (Spindle)
-        sub_conditions= [False for i in range(3)]
+        sub_conditions= [False for i in range(4)]
         while current_step == 3:
             data = cv_queue.get()
             num_class_detected = len(data)
@@ -686,6 +686,13 @@ def decision_logic():
                     (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] == class_index['crankArm'])):
                         gui.update_substep(2)
                         sub_conditions[2] = True
+
+            # hand out of field
+            if not sub_conditions[3] and sub_conditions[2] == True:
+                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
+                if hand_count == 0:
+                    gui.update_substep(3)
+                    sub_conditions[3] = True
 
             # correct location
 
@@ -918,7 +925,8 @@ class DisplayGUI:
                 status = NOT_DONE
                 substeps = ['4.1 - Detect Crank Arm',
                             '4.2 - Detect Hands',
-                            '4.3 - Detect Hands Overlap']
+                            '4.3 - Detect Single Hand Overlap over Crank Arm',
+                            '4.4 - Hand Out of Field']
                 pictures = ['step4.png']
 
             if i == 4:
