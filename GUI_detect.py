@@ -688,7 +688,12 @@ def decision_logic():
                         sub_conditions[2] = True
 
             # correct location
-
+             # hand out of field
+            if not sub_conditions[3] and sub_conditions[2] == True:
+                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
+                if hand_count == 0:
+                    gui.update_substep(3)
+                    sub_conditions[3] = True
 
             # time duration
 
@@ -1098,7 +1103,6 @@ class DisplayGUI:
                 \nThen, tighten the bolt on the other side of the pedal to secure it"
                 status = NOT_DONE
                 substeps = ['6.1 - found hands', '6.2 -found pedal', '6.3 -hand holding pedal', '6.4 -screwing pedal into crank', '6.5 -screwed pedal into crank', '6.6 -detached hand and pedal']
-                substeps = []
                 pictures = ['step6.png']
 
             if i == 6:
