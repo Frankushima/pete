@@ -176,11 +176,10 @@ def detect(save_img=False):
                             if torch.all(xyxy_list_tensor == L_hand_det[:4]):
                                 label = f"Left Hand {conf:.2f}"
                                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
-                                
-
                             elif torch.all(xyxy_list_tensor == R_hand_det[:4]):
                                 label = f"Right Hand {conf:.2f}"
                                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+                        
                         
                         else:
                             label = f'{names[int(cls)]} {conf:.2f}'
@@ -266,6 +265,7 @@ def decision_logic():
         # build substeps for step 1
         gui.build_substeps(procedure[current_step])
         
+        
         # variables for trendline, must be initalize outside of steps
         # Sub3
         s3_prev_dist_R_Spindle = -math.inf
@@ -303,7 +303,7 @@ def decision_logic():
             if not sub_conditions[2] and sub_conditions[1] == True:
                 over_count = 0  
                 if num_class_detected > 1:
-                    over_count, over_det, g = logic_tools.find_overlapping(data)
+                    over_count, over_det, over_dict = logic_tools.find_overlapping(data)
                     if over_count == 1:
                         single_overlap_pair = over_det[0]
                         # if the overlapping is between spindle and hand
@@ -321,12 +321,12 @@ def decision_logic():
 
                 if num_class_detected > 1:
                     hand_count, hands_det = logic_tools.find_hands(data)
-                    over_count, over_det, g = logic_tools.find_overlapping(data)
-                    spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
+                    over_count, over_det, over_dict = logic_tools.find_overlapping(data)
+                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
 
                     if hand_count == 2 and spindle_count == 1:
                         L_hand_det, R_hand_det = logic_tools.RL_hands(hands_det)
-                            
+
                         spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
 
                         # Right Hand
@@ -365,7 +365,7 @@ def decision_logic():
                 over_count = 0  
 
                 if num_class_detected > 1:
-                    over_count, over_det,g = logic_tools.find_overlapping(data)
+                    over_count, over_det, over_dict = logic_tools.find_overlapping(data)
                     if over_count == 1:
                         single_overlap_pair = over_det[0]
                         # if the overlapping is between spindle and hand
@@ -380,9 +380,9 @@ def decision_logic():
 
                 if num_class_detected > 1:
                     hand_count, hands_det = logic_tools.find_hands(data)
-                    over_count, over_det,g = logic_tools.find_overlapping(data)
-                    spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
-                            
+                    over_count, over_det,over_dict = logic_tools.find_overlapping(data)
+                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
+
                     if hand_count == 1 and spindle_count == 1:
                         spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
                         hand_center = logic_tools.get_box_center(*hands_det[0][:4])
@@ -657,7 +657,7 @@ def decision_logic():
                 gui.mark_step_done(DONE)
 
         # Detections Expected: Left Hand, Right Hand, CrankArm, (DoubleFlatBottomBracket), (Spindle)
-        sub_conditions= [False for i in range(3)]
+        sub_conditions= [False for i in range(4)]
         while current_step == 3:
             data = cv_queue.get()
             num_class_detected = len(data)
@@ -1034,7 +1034,8 @@ class DisplayGUI:
         for i in range(0, 7):
             if i == 0:
                 title = f"Step {i+1}, Spindle Installation"
-                description = "Putting Spindle In!"
+                description = "Put the spindle (rod-like object in left image) into the axle hole \
+                    \nOnce complete, it should look like the image on the right"
                 status = NOT_DONE
                 substeps = ['1.1 - Detect Hand',
                             '1.2 - Detect Spindle',
@@ -1043,10 +1044,12 @@ class DisplayGUI:
                             '1.5 - Spindle on Left Hand',
                             '1.6 - Spindle leaves Left Hand',
                             '1.7 - Spindle Alone']
+                pictures = ['step1.1.png', 'step1.2.png']
 
             if i == 1:
                 title = f"Step {i+1}, Bottom Bracket Installation and Tightening"
-                description = "you got this."
+                description = "Place the Double Flat Bottom Bracket into the axle hole \
+                    \nThen, turn it clockwise with you fingers to tighten it"
                 status = NOT_DONE
                 substeps = ['2.1 - Detect Hands',
                             '2.2 - Detect double flat bottom bracket',
@@ -1057,10 +1060,11 @@ class DisplayGUI:
                             '2.7 - Hand Out of Field',
                             '2.8 - Confirm  Double Flat Bottom Bracket completely overlaps Spindle',
                             '2.9 - Double Flat Bottom Bracket and Spindle left behind only']
-            
+                pictures = ['step2.png']
+                
             if i == 2:
                 title = f"Step {i+1}, Tighten with Double Flat Wrench"
-                description = "you got this."
+                description = "Use the Double Flat Wrench to tighten the Double Flat Bottom Bracket by turning it clockwise"
                 status = NOT_DONE
                 substeps = ['3.1 - Detect Double Flat Wrench',
                             '3.2 - Detect Hands',
@@ -1068,33 +1072,43 @@ class DisplayGUI:
                             '3.4 - Complete Overlap of Wrench over Double Flat Bottom Bracket',
                             '3.5 - Tighten by THREE Rotations and Complete overlap Detected',
                             '3.6 - Hand Out of Field']
+                pictures = ['step3.png']
             
             if i == 3:
                 title = f"Step {i+1}, Crank Arm Installation"
-                description = "you got this."
+                description = "Place the Crank Arm into the axle hole"
                 status = NOT_DONE
                 substeps = ['4.1 - Detect Crank Arm',
                             '4.2 - Detect Hands',
-                            '4.3 - Detect Hands Overlap']
+                            '4.3 - Detect Single Hand Overlap over Crank Arm',
+                            '4.4 - Hand Out of Field']
+                pictures = ['step4.png']
 
             if i == 4:
-                title = f"Step {i+1}, Little Bolt! IN!"
-                description = "you got this."
+                title = f"Step {i+1}, Bolt Installation"
+                description = "Secure the Crank Arm with the little bolt (bolt in left image) by placing it into the axle hole\
+                    \n Then, turn it clockwise with your fingers to tighten it"
                 status = NOT_DONE
                 substeps = ['5.1 - found hands', '5.2 -found crank arm', '5.3 -screwing bolt into crank arm', '5.4 -screwed bolt into crank arm', '5.4 -detached hand and bolt']
-            
+                pictures = ['step5.1.png', 'step5.2.png']
+
             if i == 5:
-                title = f"Step {i+1}, PEDALLLL IN!"
-                description = "you got this."
+                title = f"Step {i+1}, Pedal Installation"
+                description = "Place the pedal into the other side of the Crank Arm \
+                \nThen, tighten the bolt on the other side of the pedal to secure it"
                 status = NOT_DONE
                 substeps = ['6.1 - found hands', '6.2 -found pedal', '6.3 -hand holding pedal', '6.4 -screwing pedal into crank', '6.5 -screwed pedal into crank', '6.6 -detached hand and pedal']
+                substeps = []
+                pictures = ['step6.png']
+
             if i == 6:
-                title = f"Step {i+1}, Pedal Locking Wrench IN!"
-                description = "you got this."
+                title = f"Step {i+1}, Pedal Tightening with Crank Arm"
+                description = "Use the Pedal Locking Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = ['7.1 - found hands', '7.2 - found pedal wrench', '7.3 - hand holding pedal wrench', '7.4 - pedal wrench locked into pedal', '7.5 - detached hand and pedal wrench']
+                pictures = ['step7.1.png', 'step7.2.png']
             
-            s = Step(i, title, description, status, substeps)
+            s = Step(i, title, description, status, substeps, pictures)
 
             procedure.append(s)
 
@@ -1251,4 +1265,3 @@ if __name__ == '__main__':
     root.mainloop()
     
     exit() # close program and all other threads after destroy
-    
