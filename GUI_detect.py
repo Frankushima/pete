@@ -873,10 +873,10 @@ def decision_logic():
                 hand_i_pedal = over_dict.get((5,4)) or over_dict.get((4,5))
                 if not (hand_i_pedal):
                     end_7_1 = time.perf_counter()
-                    gui.update_substep(4)
                     time_7 = end_7_1-start_7_1
                     if(time_7>25):
                         sub_conditions[4] = True
+                        gui.update_substep(4)
             if all(sub_conditions[0:5]):
                 print("everything done")
                 gui.mark_step_done(DONE)
