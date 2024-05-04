@@ -120,16 +120,16 @@ def find_class(det, cls_id):
 
 def find_overlapping(det):
     overlapping_detections = []
-
+    gui_input = {}
     for a in range(len(det)):
         for b in range(a + 1, len(det)):
             iou = bbox_iou(det[a][:4], det[b][:4])
-            if iou > 0:  
+            if iou > 0:
                 overlapping_detections.append((det[a], det[b], iou))
+                gui_input.update({(int(det[a][5]),int(det[b][5])):float(iou)})
 
     overlapping_pairs_count = len(overlapping_detections)
     return overlapping_pairs_count, overlapping_detections, gui_input
-
 def is_overlapping(detA, detB):
     iou = bbox_iou(detA[:4], detB[:4])
     if iou > 0:
@@ -189,12 +189,3 @@ def complete_overlap(detA, detB):
     
 def rotation_detect():
     return
-
-
-
-
-    
-    
-
-
-    
