@@ -3,6 +3,8 @@
 # Helper Functions for Decision Logic
 #
 #**************************************
+import numpy as np
+import torch
 
 # print(names[int(det[0][5])]) in GUI_detect.py gives the following
 # ['adjustable monkey wrench', 
@@ -147,7 +149,7 @@ def overlap_by_reference(detA, detB):
     overlapping, iou =  is_overlapping(detA, detB)
     if not overlapping:
         return
-    
+
     # get detB area
     detB_width = detB_xmax - detB_xmin
     detB_height = detA_ymax - detA_ymin
@@ -183,9 +185,71 @@ def complete_overlap(detA, detB):
         detB_xmax <= detA_xmax and
         detB_ymax <= detA_ymax):
         return True
-    
+
     else:
         return False
-    
+
 def rotation_detect():
     return
+
+def bbox_intersection(box1, box2):
+    # xyxy
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1[0], box1[1], box1[2], box1[3]
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2[0], box2[1], box2[2], box2[3]
+    # Intersection area
+    inter = (torch.min(b1_x2, b2_x2) - torch.max(b1_x1, b2_x1)).clamp(0) * \
+            (torch.min(b1_y2, b2_y2) - torch.max(b1_y1, b2_y1)).clamp(0)
+    return inter
+
+def bbox_area(box):
+    return (box[2] - box[0]) * (box[3] - box[1])
+
+def process(file):
+    with open(file, 'r') as file:
+        lines = [line.strip() for line in file if line.strip() != '']
+    lines = [lines[i:i + 4] for i in range(0, len(lines), 4)]
+
+    full = []
+    for t, line in enumerate(lines):
+        data_dict = {}
+        for sensor in line:
+            readings = sensor.split()
+
+            key = readings[0]
+            if key == "Temp:":
+                key = "Temp"
+                values = readings[1]
+            else:
+                values = [float(val) for val in readings[1:] if not ":" in val]
+            data_dict[key] = values
+        full.append(data_dict)
+    return [entry['Angle'][2] for entry in full]
+
+def camera_sensor_frame_match(x, sr=10, fps=17):
+    """
+    check if the x-th sensor sample matches to a frame in the camera
+    param: sr = sampling rate (sensor)
+    param: fps = frame rate (cam)
+    """
+    for i in range(x):
+        if i * fps // sr == x: return True
+    return False
+
+# ==================== PERSISTOR CLASS =========================
+class Persistor:
+    def __init__(self, frames: int, condition_name):
+        self.condition = frames
+        self.counter = 0
+        self.name = condition_name
+
+    def persist(self):
+        self.counter += 1
+        print(f"[{self.name}] Persisted ({self.counter}/{self.condition}).")
+
+    def verify(self):
+        return self.counter >= self.condition
+
+    def reset(self):
+        if np.random.random() < 0.8:
+            self.counter = 0
+            print(f"[{self.name}] Disrupted ({self.counter}/{self.condition}).")
