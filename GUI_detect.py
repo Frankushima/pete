@@ -199,7 +199,12 @@ def detect(save_img=False):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
         
-        detect_ready.set()
+        # allow GUI to set up properly before start (not needed on board)
+        # detect_ready.set()
+
+        if not detect_ready.is_set():
+            detect_ready.set()
+            time.sleep(1)
 
         # Stream results
         if view_img:
@@ -298,23 +303,17 @@ def decision_logic():
         step1_validator()
 
         step2_validator()
-
+        
         step3_validator()
-
-        step4_validator()
+        
+        step4_validator()        
 
         step5_validator()
 
         step6_validator()
 
-        # current_step = 6
-        # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
-        while current_step == 6: # step 6 is written differently, so we have a for loop here NOTE: might wanna refactor the other steps to be like this one
-            print(f"In Step {current_step + 1} Now")
-            step_runtime = step7_validator()
-            print(f"Step 7 runtime={step_runtime} secs")
-            gui.mark_step_done(DONE)
-            terminate.set()
+        step_runtime = step7_validator()
+        print(f"Step 7 runtime={step_runtime} secs")
 
 # ===================== Step Logics ============================
 def step1_validator():
@@ -887,6 +886,13 @@ def step7_validator():
             2) check for null in detection [0]
     """
 
+    # sanity check for current step
+    if current_step != 6:
+        return -1
+    
+    # current_step = 6
+    # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
+    
     # a lil timer
     start_time = time.time()
     print(f"Started step 7")
@@ -1001,6 +1007,10 @@ def step7_validator():
                 in_progress_stage_satisfied = True
 
     sensor_in_use.clear()
+    
+    gui.mark_step_done(DONE)
+    terminate.set()
+    
     return time.time() - start_time
 
 
