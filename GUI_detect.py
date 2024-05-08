@@ -40,23 +40,6 @@ sensor_queue = queue.Queue()
 terminate = threading.Event()
 sensor_in_use = threading.Event()
 
-class_index = {
-    'adjustablemonkeywrench': 0,
-    'monkeywrench': 1,
-    'allenkey': 2,
-    'doubleflatswrench': 3,
-    'hand': 4,
-    'pedallockringwrench': 5,
-    'crankremover': 6,
-    'spindle': 7,
-    'doubleFlatsBottomBracket': 8,
-    'crankArmNonChainSide': 9,
-    'bolt': 10,
-    'pedal': 11,
-    'crankArm': 12
-}
-
-
 def detect(save_img=False):
     global gui, flag, cv_queue
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
@@ -242,8 +225,6 @@ sample = 0
 dummy_sensor_data = process("./test_sensor_data/output.txt")
 ewma_sd = 0  # ewma sensor data
 sum_sd = 0
-
-
 def sensor_detect():
     """
     Dummy sensor
@@ -287,613 +268,592 @@ def decision_logic():
     while True:  # prevent calling before initialization
         if gui is not None: break
 
-    while current_step + 1 < len(procedure):
-        """
-        Decision making frame goes here: we're simply calling validate() on the current step. Each step has its 
-        own `validate()` method that is defined at initialization of the procedure. The crux of decision logic is 
-        stored in each step, since each step has different criteria (unless there's some other way to implement it)
-    
-        (?) Methods that should be called here are 1) CV detect and 2) sensor detect. 
-    
-        :param data: a dict of CV data (bounding boxes) and sensor data. Or, evoke methods in main to get these data.
-        """
-        # data['CV'] = blah blah
-        # data['sensor'] = blob blob
-        # data['lala'] = wawa
-
-        # TESTING ONLY: always validate to true after 10 seconds (lol)
-        # if procedure[current_step].validate(data):
-        #     gui.mark_step_done(DONE)
-
-        # Currently validate function will not be used because of the code structure
-        # Each step has its own validate function however, the class itself cannot modify the validate function
-        # the validate method willb e implemented here hardcoded (at least for now...)
-
-        # initialize make step 1 to IN_PROGRESS
-        procedure[current_step].update_status(IN_PROGRESS)
-
-        # build substeps for step 1
-        gui.build_substeps(procedure[current_step])
-
-        # variables for trendline, must be initalize outside of steps
-        # Sub3
-        s3_prev_dist_R_Spindle = -math.inf
-        s3_trend_R_Spindle = logic_tools.Trendline.INITIALIZE
-
-        s3_prev_dist_L_Spindle = math.inf
-        s3_trend_L_Spindle = logic_tools.Trendline.INITIALIZE
-
-        # Sub5
-        s5_prev_dist_Spindle = -math.inf
-        s5_trend_Spindle = logic_tools.Trendline.INITIALIZE
-
-        # Detections Expected: Left Hand, Right Hand, Spindle
-        sub_conditions = [False for i in range(7)]
-        while current_step == 0:
-            data = cv_queue.get()
-            num_class_detected = len(data)
-
-            # SUB 0 : is there a hand?
-            if not sub_conditions[0]:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                if hand_count >= 1:
-                    gui.update_substep(0)
-                    sub_conditions[0] = True
-
-            # SUB 1 : is there a spindle? (index = 7)
-            if not sub_conditions[1] and sub_conditions[0] == True:
-                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
-                if spindle_count == 1:
-                    gui.update_substep(1)
-                    sub_conditions[1] = True
-
-            # SUB 2 : are they overlapped? hand holding spindle? 
-            if not sub_conditions[2] and sub_conditions[1] == True:
-                over_count = 0
-                if num_class_detected > 1:
-                    over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                    if over_count == 1:
-                        single_overlap_pair = over_det[0]
-                        # if the overlapping is between spindle and hand
-                        if ((single_overlap_pair[0][5] == class_index['spindle'] and single_overlap_pair[1][5] ==
-                             class_index['hand']) or
-                                (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] ==
-                                 class_index['spindle'])):
-                            gui.update_substep(2)
-                            sub_conditions[2] = True
-
-            # SUB 3 : leaving right hand + increasing left hand
-            # TODO: Fix IOU not gonna work for varying size for bounding box
-            # Using Euclidean Distane for now
-            if not sub_conditions[3] and sub_conditions[2] == True:
-                s3_curr_dist_R_Spindle = -1
-                s3_curr_dist_L_Spindle = -1
-
-                if num_class_detected > 1:
-                    hand_count, hands_det = logic_tools.find_hands(data)
-                    over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
-
-                    if hand_count == 2 and spindle_count == 1:
-                        L_hand_det, R_hand_det = logic_tools.RL_hands(hands_det)
-
-                        spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
-
-                        # Right Hand
-                        R_hand_center = logic_tools.get_box_center(*R_hand_det[:4])
-                        s3_curr_dist_R_Spindle = logic_tools.get_euclidean_distance(R_hand_center, spindle_center)
-
-                        # Spindle Leaving Right Hand 
-                        if s3_curr_dist_R_Spindle > s3_prev_dist_R_Spindle:
-                            s3_trend_R_Spindle = logic_tools.Trendline.INCREASING
-
-                        elif s3_curr_dist_R_Spindle < s3_prev_dist_R_Spindle:
-                            s3_trend_R_Spindle = logic_tools.Trendline.DECREASING
-
-                        s3_prev_dist_R_Spindle = s3_curr_dist_R_Spindle
-
-                        # Left Hand
-                        L_hand_center = logic_tools.get_box_center(*L_hand_det[:4])
-                        s3_curr_dist_L_Spindle = logic_tools.get_euclidean_distance(L_hand_center, spindle_center)
-
-                        # Spindling Going to Left Hand
-                        if s3_curr_dist_L_Spindle < s3_prev_dist_L_Spindle:
-                            s3_trend_L_Spindle = logic_tools.Trendline.DECREASING
-
-                        elif s3_curr_dist_L_Spindle > s3_prev_dist_L_Spindle:
-                            s3_trend_L_Spindle = logic_tools.Trendline.INCREASING
-
-                        s3_prev_dist_L_Spindle = s3_curr_dist_L_Spindle
-
-                        # print(f"Left Trend: {s3_trend_L_Spindle} Right Trend: {s3_trend_R_Spindle}")
-                    if hand_count == 1 and spindle_count == 1 and s3_trend_R_Spindle == logic_tools.Trendline.INCREASING and s3_trend_L_Spindle == logic_tools.Trendline.DECREASING:
-                        gui.update_substep(3)
-                        sub_conditions[3] = True
-
-            # SUB 4 : passed to left hand 
-            if not sub_conditions[4] and sub_conditions[3] == True:
-                over_count = 0
-
-                if num_class_detected > 1:
-                    over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                    if over_count == 1:
-                        single_overlap_pair = over_det[0]
-                        # if the overlapping is between spindle and hand
-                        if ((single_overlap_pair[0][5] == class_index['spindle'] and single_overlap_pair[1][5] ==
-                             class_index['hand']) or
-                                (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] ==
-                                 class_index['spindle'])):
-                            gui.update_substep(4)
-                            sub_conditions[4] = True
-
-            # SUB 5 : leaving left hand
-            if not sub_conditions[5] and sub_conditions[4] == True:
-                s5_curr_dist_Spindle = -1
-
-                if num_class_detected > 1:
-                    hand_count, hands_det = logic_tools.find_hands(data)
-                    over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                    spindle_count, spindle_det = logic_tools.find_class(data, 7)
-
-                    if hand_count == 1 and spindle_count == 1:
-                        spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
-                        hand_center = logic_tools.get_box_center(*hands_det[0][:4])
-
-                        s5_curr_dist_Spindle = logic_tools.get_euclidean_distance(hand_center, spindle_center)
-
-                        # Spindle Leaving Right Hand 
-                        if s5_curr_dist_Spindle > s5_prev_dist_Spindle:
-                            s5_trend_Spindle = logic_tools.Trendline.INCREASING
-
-                        elif s5_curr_dist_Spindle < s5_prev_dist_Spindle:
-                            s5_trend_Spindle = logic_tools.Trendline.DECREASING
-
-                        s5_prev_dist_Spindle = s5_curr_dist_Spindle
-
-                if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
-                    gui.update_substep(5)
-                    sub_conditions[5] = True
-
-            # SUB 6 : no overlap spingle left behind
-            if not sub_conditions[6] and sub_conditions[5] == True:
-                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
-
-                if spindle_count == 1 and num_class_detected == 1:
-                    gui.update_substep(6)
-                    sub_conditions[6] = True
-
-            if all(sub_conditions):
-                print("Step 1 Done")
-                gui.mark_step_done(DONE)
-
-            # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
-
-        # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
-        # Both Hand hold Bracket
-        # Single Hand Tighten
-        sub_conditions = [False for i in range(9)]
-        while current_step == 1:
-            data = cv_queue.get()
-            num_class_detected = len(data)
-
-            # SUB 0 : is there a hand?
-            if not sub_conditions[0]:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                if hand_count >= 1:
-                    gui.update_substep(0)
-                    sub_conditions[0] = True
-
-            # SUB 1 : is there a doubleflatbottombracket?
-            if not sub_conditions[1] and sub_conditions[0] == True:
-                double_flat_bb_count, _ = logic_tools.find_class(data, class_index['doubleFlatsBottomBracket'])
-                if double_flat_bb_count == 1:
-                    gui.update_substep(1)
-                    sub_conditions[1] = True
-
-            # SUB 2 : is there a spindle?
-            if not sub_conditions[2] and sub_conditions[1] == True:
-                spindle_count, _ = logic_tools.find_class(data, class_index['spindle'])
-                if spindle_count == 1:
-                    gui.update_substep(2)
-                    sub_conditions[2] = True
-
-            # SUB 3: hand holding doubleflat bottom bracket
-            if not sub_conditions[3] and sub_conditions[2] == True:
-                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
-                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index[
-                    'doubleFlatsBottomBracket'])
-
-                for hand in hand_det:
-                    overlapping, _ = logic_tools.is_overlapping(hand, double_flat_bb_det[0])
-
-                if overlapping:
-                    gui.update_substep(3)
-                    sub_conditions[3] = True
-
-            # SUB 4: bottom bracket completely covering spindle
-            if not sub_conditions[4] and sub_conditions[3] == True:
-                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index[
-                    'doubleFlatsBottomBracket'])
-                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
-
-                if double_flat_bb_count == 1 and spindle_count == 1:
-                    double_flat_bb_det = double_flat_bb_det[0]
-                    spindle_det = spindle_det[0]
-
-                if double_flat_bb_count and spindle_count:
-                    complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
-                    if complete_overlap:
-                        gui.update_substep(4)
-                        sub_conditions[4] = True
-
-            # SUB 5: right hand totally covering double flat bottom bracket
-            if not sub_conditions[5] and sub_conditions[4] == True:
-                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
-                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index[
-                    'doubleFlatsBottomBracket'])
-
-                if hand_count > 1:
-                    _, R_hand = logic_tools.RL_hands(hand_det)
-
-                else:
-                    R_hand = hand_det[0]
-
-                if double_flat_bb_count == 1:
-                    double_flat_bb_det = double_flat_bb_det[0]
-
-                if double_flat_bb_count:
-                    complete_overlap = logic_tools.complete_overlap(R_hand, double_flat_bb_det)
-                    if complete_overlap:
-                        gui.update_substep(5)
-                        sub_conditions[5] = True
-
-            # SUB 6: Hand is Out of Field
-            if not sub_conditions[6] and sub_conditions[5] == True:
-                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
-                if hand_count == 0:
-                    gui.update_substep(6)
-                    sub_conditions[6] = True
-
-            # SUB 7: Reconfirm Doubleflatbottombracket is completely over spindle
-            if not sub_conditions[7] and sub_conditions[6] == True:
-                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index[
-                    'doubleFlatsBottomBracket'])
-                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
-
-                if double_flat_bb_count == 1 and spindle_count == 1:
-                    double_flat_bb_det = double_flat_bb_det[0]
-                    spindle_det = spindle_det[0]
-
-                if double_flat_bb_count and spindle_count:
-                    complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
-                    if complete_overlap:
-                        gui.update_substep(7)
-                        sub_conditions[7] = True
-
-            # SUB 8: Only Doubleflatbottombracket and spindle left behind
-            if not sub_conditions[8] and sub_conditions[7] == True:
-                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index[
-                    'doubleFlatsBottomBracket'])
-                spindle_count, spindle_det = logic_tools.find_class(data, class_index['spindle'])
-
-                if num_class_detected == 2 and spindle_count == 1 and double_flat_bb_count == 1:
-                    gui.update_substep(8)
-                    sub_conditions[8] = True
-
-            # if spindle + bolt + hand overlap --> passed
-
-            # if spindle + bolt + hand location aroudn there in the middle = pass
-
-            # could add time duration for them
-
-            if all(sub_conditions):
-                print("Step 2 Done")
-                gui.mark_step_done(DONE)
-
-        # Detections Expected: Left Hand, Right Hand, Double-flats Wrench, (DoubleFlatBottomBracket), (Spindle)
-        s4_prev_wrench_xmin = math.inf
-        s4_prev_wrench_ymax = math.inf
-        s4_prev_wrench_ymin = math.inf
-        s4_turn_count = 0
-        s4_history = []
-
-        sub_conditions = [False for i in range(6)]
-        while current_step == 2:
-            data = cv_queue.get()
-            num_class_detected = len(data)
-
-            # find double flat wrench
-            if not sub_conditions[0]:
-                double_flat_wrench_count, _ = logic_tools.find_class(data, class_index['doubleflatswrench'])
-                if double_flat_wrench_count == 1:
-                    gui.update_substep(0)
-                    sub_conditions[0] = True
-
-            # find hands
-            if not sub_conditions[1] and sub_conditions[0] == True:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                if hand_count > 1:
-                    gui.update_substep(1)
-                    sub_conditions[1] = True
-
-            # overlap hands and doubleflatwrench
-            if not sub_conditions[2] and sub_conditions[1] == True:
-                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
-                wrench_count, wrench_det = logic_tools.find_class(data, class_index['doubleflatswrench'])
-
-                for hand in hand_det:
-                    overlapping, _ = logic_tools.is_overlapping(hand, wrench_det[0])
-                    if overlapping:
-                        gui.update_substep(2)
-                        sub_conditions[2] = True
-
-            # complete overlap of wrench over doubleflatbracket
-            if not sub_conditions[3] and sub_conditions[2] == True:
-                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index[
-                    'doubleFlatsBottomBracket'])
-                wrench_count, wrench_det = logic_tools.find_class(data, class_index['doubleflatswrench'])
-
-                if double_flat_bb_count == 1 and wrench_count == 1:
-                    double_flat_bb_det = double_flat_bb_det[0]
-                    wrench_det = wrench_det[0]
-
-                if double_flat_bb_count and wrench_count:
-                    complete_overlap = logic_tools.complete_overlap(wrench_det, double_flat_bb_det)
-                    if complete_overlap:
-                        gui.update_substep(3)
-                        sub_conditions[3] = True
-
-                        # rotation detected and wrench completely over doubleflatbracket
-            if not sub_conditions[4] and sub_conditions[3] == True:
-                double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, class_index[
-                    'doubleFlatsBottomBracket'])
-                wrench_count, wrench_det = logic_tools.find_class(data, class_index['doubleflatswrench'])
-
-                if double_flat_bb_count == 1 and wrench_count == 1:
-                    double_flat_bb_det = double_flat_bb_det[0]
-                    wrench_det = wrench_det[0]
-
-                if double_flat_bb_count and wrench_count:
-                    complete_overlap = logic_tools.complete_overlap(wrench_det, double_flat_bb_det)
-
-                    if complete_overlap:
-                        # Note: in yolov7 higher y value means lower position in canvas
-                        if ((wrench_det[0] < s4_prev_wrench_xmin + 50 and wrench_det[3] < s4_prev_wrench_ymax + 20) or
-                                (wrench_det[0] > s4_prev_wrench_xmin + 50 and wrench_det[
-                                    1] < s4_prev_wrench_ymin + 20)):
-                            s4_history.append("Turning")
-
-                        if ((wrench_det[0] > s4_prev_wrench_xmin + 50 and wrench_det[3] > s4_prev_wrench_ymax + 20) or
-                                (wrench_det[0] < s4_prev_wrench_xmin + 50 and wrench_det[
-                                    1] > s4_prev_wrench_ymin + 20)):
-                            s4_history.append("Resetting")
-
-                            temp_dict = dict(Counter(s4_history[-10:]))
-                            if (temp_dict["Resetting"] > 3):
-                                s4_history = []
-                                s4_turn_count += 1
-                                print(f"Finished Turn: {s4_turn_count}")
-
-                        # use for turn calibrating
-                        a = dict(Counter(s4_history))
-                        # print(a)
-
-                        s4_prev_wrench_xmin = wrench_det[0]
-                        s4_prev_wrench_ymin = wrench_det[1]
-                        s4_prev_wrench_ymax = wrench_det[3]
-
-                # Final turn didn't count
-                if wrench_count == 0 and a['Turning'] > 0:
-                    s4_turn_count += 1
-                    print(f"Finished Turn: {s4_turn_count}")
-
-                if s4_turn_count == 3:
-                    gui.update_substep(4)
-                    sub_conditions[4] = True
-
-            # hand is out of field
-            if not sub_conditions[5] and sub_conditions[4] == True:
-                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
-                if hand_count == 0:
-                    gui.update_substep(5)
-                    sub_conditions[5] = True
-
-            # correct overlap increase/decrease
-
-            # correct wrench location or hand location
-
-            # time duration 
-
-            if all(sub_conditions):
-                print("Step 3 Done")
-                gui.mark_step_done(DONE)
-
-        # Detections Expected: Left Hand, Right Hand, CrankArm, (DoubleFlatBottomBracket), (Spindle)
-        sub_conditions = [False for i in range(4)]
-        while current_step == 3:
-            data = cv_queue.get()
-            num_class_detected = len(data)
-
-            # find crank arm
-            if not sub_conditions[0]:
-                double_flat_wrench_count, _ = logic_tools.find_class(data, class_index['crankArm'])
-                if double_flat_wrench_count == 1:
-                    gui.update_substep(0)
-                    sub_conditions[0] = True
-
-            # find hand
-            if not sub_conditions[1] and sub_conditions[0] == True:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                if hand_count > 1:
-                    gui.update_substep(1)
-                    sub_conditions[1] = True
-
-            # find correct overlap
-            if not sub_conditions[2] and sub_conditions[1] == True:
-                over_count, over_det, g = logic_tools.find_overlapping(data)
+    """
+    Decision making frame goes here: we're simply calling validate() on the current step. Each step has its 
+    own `validate()` method that is defined at initialization of the procedure. The crux of decision logic is 
+    stored in each step, since each step has different criteria (unless there's some other way to implement it)
+
+    (?) Methods that should be called here are 1) CV detect and 2) sensor detect. 
+
+    :param data: a dict of CV data (bounding boxes) and sensor data. Or, evoke methods in main to get these data.
+    """
+    # data['CV'] = blah blah
+    # data['sensor'] = blob blob
+    # data['lala'] = wawa
+
+    # TESTING ONLY: always validate to true after 10 seconds (lol)
+    # if procedure[current_step].validate(data):
+    #     gui.mark_step_done(DONE)
+
+    # Currently validate function will not be used because of the code structure
+    # Each step has its own validate function however, the class itself cannot modify the validate function
+    # the validate method willb e implemented here hardcoded (at least for now...)
+
+    # initialize make step 1 to IN_PROGRESS
+    procedure[current_step].update_status(IN_PROGRESS)
+
+    # build substeps for step 1
+    gui.build_substeps(procedure[current_step])
+
+    # variables for trendline, must be initalize outside of steps
+    # Sub3
+    s3_prev_dist_R_Spindle = -math.inf
+    s3_trend_R_Spindle = logic_tools.Trendline.INITIALIZE
+
+    s3_prev_dist_L_Spindle = math.inf
+    s3_trend_L_Spindle = logic_tools.Trendline.INITIALIZE
+
+    # Sub5
+    s5_prev_dist_Spindle = -math.inf
+    s5_trend_Spindle = logic_tools.Trendline.INITIALIZE
+
+    # Detections Expected: Left Hand, Right Hand, Spindle
+    sub_conditions = [False for i in range(7)]
+    while current_step == 0:
+        data = cv_queue.get()
+        num_class_detected = len(data)
+
+        # SUB 0 : is there a hand?
+        if not sub_conditions[0]:
+            hand_count, hands_det = logic_tools.find_hands(data)
+            if hand_count >= 1:
+                gui.update_substep(0)
+                sub_conditions[0] = True
+
+        # SUB 1 : is there a spindle? (index = 7)
+        if not sub_conditions[1] and sub_conditions[0] == True:
+            spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
+            if spindle_count == 1:
+                gui.update_substep(1)
+                sub_conditions[1] = True
+
+        # SUB 2 : are they overlapped? hand holding spindle?
+        if not sub_conditions[2] and sub_conditions[1] == True:
+            over_count = 0
+            if num_class_detected > 1:
+                over_count, over_det, over_dict = logic_tools.find_overlapping(data)
                 if over_count == 1:
                     single_overlap_pair = over_det[0]
                     # if the overlapping is between spindle and hand
-                    if ((single_overlap_pair[0][5] == class_index['crankArm'] and single_overlap_pair[1][5] ==
-                         class_index['hand']) or
-                            (single_overlap_pair[0][5] == class_index['hand'] and single_overlap_pair[1][5] ==
-                             class_index['crankArm'])):
+                    if (single_overlap_pair[0][5] == SPINDLE and single_overlap_pair[1][5] == HAND) \
+                            or (single_overlap_pair[0][5] == HAND and single_overlap_pair[1][5] == SPINDLE):
                         gui.update_substep(2)
                         sub_conditions[2] = True
 
-            # correct location
-            # hand out of field
-            if not sub_conditions[3] and sub_conditions[2] == True:
-                hand_count, hand_det = logic_tools.find_class(data, class_index['hand'])
-                if hand_count == 0:
+        # SUB 3 : leaving right hand + increasing left hand
+        # TODO: Fix IOU not gonna work for varying size for bounding box
+        # Using Euclidean Distane for now
+        if not sub_conditions[3] and sub_conditions[2] == True:
+            s3_curr_dist_R_Spindle = -1
+            s3_curr_dist_L_Spindle = -1
+
+            if num_class_detected > 1:
+                hand_count, hands_det = logic_tools.find_hands(data)
+                over_count, over_det, over_dict = logic_tools.find_overlapping(data)
+                spindle_count, spindle_det = logic_tools.find_class(data, 7)
+
+                if hand_count == 2 and spindle_count == 1:
+                    L_hand_det, R_hand_det = logic_tools.RL_hands(hands_det)
+
+                    spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
+
+                    # Right Hand
+                    R_hand_center = logic_tools.get_box_center(*R_hand_det[:4])
+                    s3_curr_dist_R_Spindle = logic_tools.get_euclidean_distance(R_hand_center, spindle_center)
+
+                    # Spindle Leaving Right Hand
+                    if s3_curr_dist_R_Spindle > s3_prev_dist_R_Spindle:
+                        s3_trend_R_Spindle = logic_tools.Trendline.INCREASING
+
+                    elif s3_curr_dist_R_Spindle < s3_prev_dist_R_Spindle:
+                        s3_trend_R_Spindle = logic_tools.Trendline.DECREASING
+
+                    s3_prev_dist_R_Spindle = s3_curr_dist_R_Spindle
+
+                    # Left Hand
+                    L_hand_center = logic_tools.get_box_center(*L_hand_det[:4])
+                    s3_curr_dist_L_Spindle = logic_tools.get_euclidean_distance(L_hand_center, spindle_center)
+
+                    # Spindling Going to Left Hand
+                    if s3_curr_dist_L_Spindle < s3_prev_dist_L_Spindle:
+                        s3_trend_L_Spindle = logic_tools.Trendline.DECREASING
+
+                    elif s3_curr_dist_L_Spindle > s3_prev_dist_L_Spindle:
+                        s3_trend_L_Spindle = logic_tools.Trendline.INCREASING
+
+                    s3_prev_dist_L_Spindle = s3_curr_dist_L_Spindle
+
+                    # print(f"Left Trend: {s3_trend_L_Spindle} Right Trend: {s3_trend_R_Spindle}")
+                if hand_count == 1 and spindle_count == 1 and s3_trend_R_Spindle == logic_tools.Trendline.INCREASING and s3_trend_L_Spindle == logic_tools.Trendline.DECREASING:
                     gui.update_substep(3)
                     sub_conditions[3] = True
 
-            # time duration
-
-            # correct increase/decrease
-
-            if all(sub_conditions):
-                print("Step 4 Done")
-                gui.mark_step_done(DONE)
-
-        # Detections Expected: Left Hand, Right Hand, Bolt, CrankArm
-        sub_conditions = [False for _ in range(5)]
-        bolt_time = 0
-        away_time = 0
-        while current_step == 4:
-            procedure[current_step].update_status(IN_PROGRESS)
-            data = cv_queue.get()
-            num_class_detected = len(data)
-
-            st = time.time()
-
-            # SUB 0 : is there a hand?
-            if not sub_conditions[0]:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                if (hand_count):
-                    # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
-                    gui.update_substep(0)
-                    sub_conditions[0] = True
-            # ['found hands', 'found crank arm', 'screwing bolt into crank arm', 'screwed bolt into crank arm'']
-            # SUB 1 : is there a pedal wrench? (index = 7)
-            if not sub_conditions[1]:
-                crank_count, crank_det = logic_tools.find_class(data, 12)
-                if (crank_count):
-                    # procedure[current_step].update_description(u'Found crank arm👍')
-                    gui.update_substep(1)
-                    sub_conditions[1] = True
-            # Add rotating condition
-            # SUB 2 : are they overlapped? hand holding spindle?
+        # SUB 4 : passed to left hand
+        if not sub_conditions[4] and sub_conditions[3] == True:
             over_count = 0
-            over_dict = {}
+
             if num_class_detected > 1:
                 over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-            # print(over_dict)
-            # SUB 3 : leaving right hand + increasing left hand
-            if not sub_conditions[3] and sub_conditions[1] == True:
-                hand_i_bolt = over_dict.get((4, 10)) or over_dict.get((10, 4))
-                crank_i_bolt = over_dict.get((12, 10)) or over_dict.get((10, 12))
-                if crank_i_bolt and hand_i_bolt:
-                    if hand_i_bolt < 0.015 and crank_i_bolt < 0.015:
-                        bolt_time += 1
-                        if not sub_conditions[2]:
-                            # procedure[current_step].update_description(u'Screwing bolt into crank arm...')
-                            gui.update_substep(2)
-                            sub_conditions[2] = True
-                        if bolt_time > 30:
-                            # procedure[current_step].update_description(u'Screwed bolt into crank arm')
-                            gui.update_substep(3)
-                            sub_conditions[3] = True
-            elif not sub_conditions[4] and sub_conditions[3]:
-                hand_i_bolt = over_dict.get((4, 10)) or over_dict.get((10, 4))
-                if not (hand_i_bolt):
-                    away_time += 1
-                    if (away_time > 8) and not (over_dict.get((4, 12)) or over_dict.get((12, 4))):
-                        if not (over_dict.get((4, 12)) or over_dict.get((12, 4))):
-                            gui.update_substep(4)
-                            sub_conditions[4] = True
+                if over_count == 1:
+                    single_overlap_pair = over_det[0]
+                    # if the overlapping is between spindle and hand
+                    if ((single_overlap_pair[0][5] == SPINDLE and single_overlap_pair[1][5] ==
+                         HAND) or
+                            (single_overlap_pair[0][5] == HAND and single_overlap_pair[1][5] ==
+                             SPINDLE)):
+                        gui.update_substep(4)
+                        sub_conditions[4] = True
 
-            print(time.time() - st)
+        # SUB 5 : leaving left hand
+        if not sub_conditions[5] and sub_conditions[4] == True:
+            s5_curr_dist_Spindle = -1
 
-            if all(sub_conditions[0:5]):
-                print("everything done")
-                gui.mark_step_done(DONE)
-
-
-        pedal_time = 0
-        sub_conditions = [False for i in range(7)]
-        while (current_step == 5):
-            # ['found hands', 'found pedal', 'hand holding pedal', 'screwing pedal into crank', 'screwed pedal into crank']
-            procedure[current_step].update_status(IN_PROGRESS)
-            data = cv_queue.get()
-
-            num_class_detected = len(data)
-
-            # SUB 0 : is there a hand?
-            if not sub_conditions[0]:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                if (hand_count):
-                    # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
-                    gui.update_substep(0)
-                    sub_conditions[0] = True
-
-            # SUB 1 : is there a pedal wrench? (index = 7)
-            if not sub_conditions[1] and sub_conditions[0] == True:
-                ped_count, ped_det = logic_tools.find_class(data, 11)
-                if (ped_count):
-                    # procedure[current_step].update_description(u'Found pedal👍')
-                    gui.update_substep(1)
-                    sub_conditions[1] = True
-            # Add rotating condition
-            # SUB 2 : are they overlapped? hand holding spindle?
-            over_count = 0
-            over_dict = {}
             if num_class_detected > 1:
+                hand_count, hands_det = logic_tools.find_hands(data)
                 over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-            # print(over_dict)
-            # SUB 3 : leaving right hand + increasing left hand
-            if not sub_conditions[2] and sub_conditions[1] == True:
-                if over_dict.get((4, 11)) or over_dict.get((11, 4)):
-                    # procedure[current_step].update_description(u'Hand holding pedal 👍')
-                    gui.update_substep(2)
-                    # print("Intrsection of hand and pedal: ",over_dict.get((4,11)) or over_dict.get((11,4)))
-                    sub_conditions[2] = True
-            if not sub_conditions[4] and sub_conditions[1] == True:
-                crank_i_pedal = over_dict.get((12, 11)) or over_dict.get((12, 11))
-                # crank_i_bolt = over_dict.get((12,10)) or over_dict.get((10,12))
-                if (crank_i_pedal):
-                    if (crank_i_pedal < 0.05):
-                        pedal_time += 1
-                        if (not sub_conditions[3]):
-                            if (pedal_time > 2):
-                                # procedure[current_step].update_description(u'Screwing pedal into crank arm...')
-                                gui.update_substep(3)
-                                sub_conditions[3] = True
-                        elif (pedal_time > 45):
-                            # procedure[current_step].update_description(u'Screwed pedal into crank arm')
-                            gui.update_substep(4)
-                            sub_conditions[4] = True
-            if sub_conditions[4] and not sub_conditions[5] == True:
-                hand_i_pedal = over_dict.get((4, 11)) or over_dict.get((4, 11))
-                if not (hand_i_pedal):
+                spindle_count, spindle_det = logic_tools.find_class(data, 7)
+
+                if hand_count == 1 and spindle_count == 1:
+                    spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
+                    hand_center = logic_tools.get_box_center(*hands_det[0][:4])
+
+                    s5_curr_dist_Spindle = logic_tools.get_euclidean_distance(hand_center, spindle_center)
+
+                    # Spindle Leaving Right Hand
+                    if s5_curr_dist_Spindle > s5_prev_dist_Spindle:
+                        s5_trend_Spindle = logic_tools.Trendline.INCREASING
+
+                    elif s5_curr_dist_Spindle < s5_prev_dist_Spindle:
+                        s5_trend_Spindle = logic_tools.Trendline.DECREASING
+
+                    s5_prev_dist_Spindle = s5_curr_dist_Spindle
+
+            if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
+                gui.update_substep(5)
+                sub_conditions[5] = True
+
+        # SUB 6 : no overlap spingle left behind
+        if not sub_conditions[6] and sub_conditions[5] == True:
+            spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
+
+            if spindle_count == 1 and num_class_detected == 1:
+                gui.update_substep(6)
+                sub_conditions[6] = True
+
+        if all(sub_conditions):
+            print("Step 1 Done")
+            gui.mark_step_done(DONE)
+
+        # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
+
+    # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
+    # Both Hand hold Bracket
+    # Single Hand Tighten
+    sub_conditions = [False for i in range(9)]
+    while current_step == 1:
+        data = cv_queue.get()
+        num_class_detected = len(data)
+
+        # SUB 0 : is there a hand?
+        if not sub_conditions[0]:
+            hand_count, hands_det = logic_tools.find_hands(data)
+            if hand_count >= 1:
+                gui.update_substep(0)
+                sub_conditions[0] = True
+
+        # SUB 1 : is there a doubleflatbottombracket?
+        if not sub_conditions[1] and sub_conditions[0] == True:
+            double_flat_bb_count, _ = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+            if double_flat_bb_count == 1:
+                gui.update_substep(1)
+                sub_conditions[1] = True
+
+        # SUB 2 : is there a spindle?
+        if not sub_conditions[2] and sub_conditions[1] == True:
+            spindle_count, _ = logic_tools.find_class(data, SPINDLE)
+            if spindle_count == 1:
+                gui.update_substep(2)
+                sub_conditions[2] = True
+
+        # SUB 3: hand holding doubleflat bottom bracket
+        if not sub_conditions[3] and sub_conditions[2] == True:
+            hand_count, hand_det = logic_tools.find_class(data, HAND)
+            double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+
+            for hand in hand_det:
+                overlapping, _ = logic_tools.is_overlapping(hand, double_flat_bb_det[0])
+
+            if overlapping:
+                gui.update_substep(3)
+                sub_conditions[3] = True
+
+        # SUB 4: bottom bracket completely covering spindle
+        if not sub_conditions[4] and sub_conditions[3] == True:
+            double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+            spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
+
+            if double_flat_bb_count == 1 and spindle_count == 1:
+                double_flat_bb_det = double_flat_bb_det[0]
+                spindle_det = spindle_det[0]
+
+            if double_flat_bb_count and spindle_count:
+                complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
+                if complete_overlap:
+                    gui.update_substep(4)
+                    sub_conditions[4] = True
+
+        # SUB 5: right hand totally covering double flat bottom bracket
+        if not sub_conditions[5] and sub_conditions[4] == True:
+            hand_count, hand_det = logic_tools.find_class(data, HAND)
+            double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+
+            if hand_count > 1:
+                _, R_hand = logic_tools.RL_hands(hand_det)
+
+            else:
+                R_hand = hand_det[0]
+
+            if double_flat_bb_count == 1:
+                double_flat_bb_det = double_flat_bb_det[0]
+
+            if double_flat_bb_count:
+                complete_overlap = logic_tools.complete_overlap(R_hand, double_flat_bb_det)
+                if complete_overlap:
                     gui.update_substep(5)
                     sub_conditions[5] = True
-            if all(sub_conditions[0:6]):
-                print("everything done")
-                gui.mark_step_done(DONE)
-        sub_conditions = [False for i in range(7)]
-        start_7 = time.perf_counter()
-        time_7 = 0
 
-        # current_step = 6
-        # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
-        while current_step == 6:
-            print(f"In Step {current_step + 1} Now")
-            step_runtime = step7_validator()
-            print(f"Step 7 runtime={step_runtime} secs")
+        # SUB 6: Hand is Out of Field
+        if not sub_conditions[6] and sub_conditions[5] == True:
+            hand_count, hand_det = logic_tools.find_class(data, HAND)
+            if hand_count == 0:
+                gui.update_substep(6)
+                sub_conditions[6] = True
+
+        # SUB 7: Reconfirm Doubleflatbottombracket is completely over spindle
+        if not sub_conditions[7] and sub_conditions[6] == True:
+            double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+            spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
+
+            if double_flat_bb_count == 1 and spindle_count == 1:
+                double_flat_bb_det = double_flat_bb_det[0]
+                spindle_det = spindle_det[0]
+
+            if double_flat_bb_count and spindle_count:
+                complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
+                if complete_overlap:
+                    gui.update_substep(7)
+                    sub_conditions[7] = True
+
+        # SUB 8: Only Doubleflatbottombracket and spindle left behind
+        if not sub_conditions[8] and sub_conditions[7] == True:
+            double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+            spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
+
+            if num_class_detected == 2 and spindle_count == 1 and double_flat_bb_count == 1:
+                gui.update_substep(8)
+                sub_conditions[8] = True
+
+        # if spindle + bolt + hand overlap --> passed
+
+        # if spindle + bolt + hand location aroudn there in the middle = pass
+
+        # could add time duration for them
+
+        if all(sub_conditions):
+            print("Step 2 Done")
             gui.mark_step_done(DONE)
-            terminate.set()
+
+    # Detections Expected: Left Hand, Right Hand, Double-flats Wrench, (DoubleFlatBottomBracket), (Spindle)
+    s4_prev_wrench_xmin = math.inf
+    s4_prev_wrench_ymax = math.inf
+    s4_prev_wrench_ymin = math.inf
+    s4_turn_count = 0
+    s4_history = []
+
+    sub_conditions = [False for i in range(6)]
+    while current_step == 2:
+        data = cv_queue.get()
+        num_class_detected = len(data)
+
+        # find double flat wrench
+        if not sub_conditions[0]:
+            double_flat_wrench_count, _ = logic_tools.find_class(data, DOUBLE_FLATS_WRENCH)
+            if double_flat_wrench_count == 1:
+                gui.update_substep(0)
+                sub_conditions[0] = True
+
+        # find hands
+        if not sub_conditions[1] and sub_conditions[0] == True:
+            hand_count, hands_det = logic_tools.find_hands(data)
+            if hand_count > 1:
+                gui.update_substep(1)
+                sub_conditions[1] = True
+
+        # overlap hands and doubleflatwrench
+        if not sub_conditions[2] and sub_conditions[1] == True:
+            hand_count, hand_det = logic_tools.find_class(data, HAND)
+            wrench_count, wrench_det = logic_tools.find_class(data, DOUBLE_FLATS_WRENCH)
+
+            for hand in hand_det:
+                overlapping, _ = logic_tools.is_overlapping(hand, wrench_det[0])
+                if overlapping:
+                    gui.update_substep(2)
+                    sub_conditions[2] = True
+
+        # complete overlap of wrench over doubleflatbracket
+        if not sub_conditions[3] and sub_conditions[2] == True:
+            double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+            wrench_count, wrench_det = logic_tools.find_class(data, DOUBLE_FLATS_WRENCH)
+
+            if double_flat_bb_count == 1 and wrench_count == 1:
+                double_flat_bb_det = double_flat_bb_det[0]
+                wrench_det = wrench_det[0]
+
+            if double_flat_bb_count and wrench_count:
+                complete_overlap = logic_tools.complete_overlap(wrench_det, double_flat_bb_det)
+                if complete_overlap:
+                    gui.update_substep(3)
+                    sub_conditions[3] = True
+
+                    # rotation detected and wrench completely over doubleflatbracket
+        if not sub_conditions[4] and sub_conditions[3] == True:
+            double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
+            wrench_count, wrench_det = logic_tools.find_class(data, DOUBLE_FLATS_WRENCH)
+
+            if double_flat_bb_count == 1 and wrench_count == 1:
+                double_flat_bb_det = double_flat_bb_det[0]
+                wrench_det = wrench_det[0]
+
+            if double_flat_bb_count and wrench_count:
+                complete_overlap = logic_tools.complete_overlap(wrench_det, double_flat_bb_det)
+
+                if complete_overlap:
+                    # Note: in yolov7 higher y value means lower position in canvas
+                    if ((wrench_det[0] < s4_prev_wrench_xmin + 50 and wrench_det[3] < s4_prev_wrench_ymax + 20) or
+                            (wrench_det[0] > s4_prev_wrench_xmin + 50 and wrench_det[
+                                1] < s4_prev_wrench_ymin + 20)):
+                        s4_history.append("Turning")
+
+                    if ((wrench_det[0] > s4_prev_wrench_xmin + 50 and wrench_det[3] > s4_prev_wrench_ymax + 20) or
+                            (wrench_det[0] < s4_prev_wrench_xmin + 50 and wrench_det[
+                                1] > s4_prev_wrench_ymin + 20)):
+                        s4_history.append("Resetting")
+
+                        temp_dict = dict(Counter(s4_history[-10:]))
+                        if (temp_dict["Resetting"] > 3):
+                            s4_history = []
+                            s4_turn_count += 1
+                            print(f"Finished Turn: {s4_turn_count}")
+
+                    # use for turn calibrating
+                    a = dict(Counter(s4_history))
+                    # print(a)
+
+                    s4_prev_wrench_xmin = wrench_det[0]
+                    s4_prev_wrench_ymin = wrench_det[1]
+                    s4_prev_wrench_ymax = wrench_det[3]
+
+            # Final turn didn't count
+            if wrench_count == 0 and a['Turning'] > 0:
+                s4_turn_count += 1
+                print(f"Finished Turn: {s4_turn_count}")
+
+            if s4_turn_count == 3:
+                gui.update_substep(4)
+                sub_conditions[4] = True
+
+        # hand is out of field
+        if not sub_conditions[5] and sub_conditions[4] == True:
+            hand_count, hand_det = logic_tools.find_class(data, HAND)
+            if hand_count == 0:
+                gui.update_substep(5)
+                sub_conditions[5] = True
+
+        # correct overlap increase/decrease
+
+        # correct wrench location or hand location
+
+        # time duration
+
+        if all(sub_conditions):
+            print("Step 3 Done")
+            gui.mark_step_done(DONE)
+
+    # Detections Expected: Left Hand, Right Hand, CrankArm, (DoubleFlatBottomBracket), (Spindle)
+    sub_conditions = [False for i in range(4)]
+    while current_step == 3:
+        data = cv_queue.get()
+        num_class_detected = len(data)
+
+        # find crank arm
+        if not sub_conditions[0]:
+            double_flat_wrench_count, _ = logic_tools.find_class(data, CRANK_ARM)
+            if double_flat_wrench_count == 1:
+                gui.update_substep(0)
+                sub_conditions[0] = True
+
+        # find hand
+        if not sub_conditions[1] and sub_conditions[0] == True:
+            hand_count, hands_det = logic_tools.find_hands(data)
+            if hand_count > 1:
+                gui.update_substep(1)
+                sub_conditions[1] = True
+
+        # find correct overlap
+        if not sub_conditions[2] and sub_conditions[1] == True:
+            over_count, over_det, g = logic_tools.find_overlapping(data)
+            if over_count == 1:
+                single_overlap_pair = over_det[0]
+                # if the overlapping is between spindle and hand
+                if ((single_overlap_pair[0][5] == CRANK_ARM and single_overlap_pair[1][5] ==
+                     HAND) or
+                        (single_overlap_pair[0][5] == HAND and single_overlap_pair[1][5] ==
+                         CRANK_ARM)):
+                    gui.update_substep(2)
+                    sub_conditions[2] = True
+
+        # correct location
+        # hand out of field
+        if not sub_conditions[3] and sub_conditions[2] == True:
+            hand_count, hand_det = logic_tools.find_class(data, HAND)
+            if hand_count == 0:
+                gui.update_substep(3)
+                sub_conditions[3] = True
+
+        # time duration
+
+        # correct increase/decrease
+
+        if all(sub_conditions):
+            print("Step 4 Done")
+            gui.mark_step_done(DONE)
+
+    # Detections Expected: Left Hand, Right Hand, Bolt, CrankArm
+    sub_conditions = [False for _ in range(5)]
+    bolt_time = 0
+    away_time = 0
+    while current_step == 4:
+        data = cv_queue.get()
+        num_class_detected = len(data)
+
+        # SUB 0 : is there a hand?
+        if not sub_conditions[0]:
+            hand_count, hands_det = logic_tools.find_hands(data)
+            if hand_count:
+                # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                gui.update_substep(0)
+                sub_conditions[0] = True
+        # ['found hands', 'found crank arm', 'screwing bolt into crank arm', 'screwed bolt into crank arm'']
+        # SUB 1 : is there a pedal wrench? (index = 7)
+        if not sub_conditions[1]:
+            crank_count, crank_det = logic_tools.find_class(data, 12)
+            if crank_count:
+                # procedure[current_step].update_description(u'Found crank arm👍')
+                gui.update_substep(1)
+                sub_conditions[1] = True
+        # Add rotating condition
+        # SUB 2 : are they overlapped? hand holding spindle?
+        over_count = 0
+        over_dict = {}
+        if num_class_detected > 1:
+            over_count, over_det, over_dict = logic_tools.find_overlapping(data)
+        # print(over_dict)
+        # SUB 3 : leaving right hand + increasing left hand
+        if not sub_conditions[3] and sub_conditions[1] == True:
+            hand_i_bolt = over_dict.get((4, 10)) or over_dict.get((10, 4))
+            crank_i_bolt = over_dict.get((12, 10)) or over_dict.get((10, 12))
+            if crank_i_bolt and hand_i_bolt:
+                if hand_i_bolt < 0.015 and crank_i_bolt < 0.015:
+                    bolt_time += 1
+                    if not sub_conditions[2]:
+                        # procedure[current_step].update_description(u'Screwing bolt into crank arm...')
+                        gui.update_substep(2)
+                        sub_conditions[2] = True
+                    if bolt_time > 30:
+                        # procedure[current_step].update_description(u'Screwed bolt into crank arm')
+                        gui.update_substep(3)
+                        sub_conditions[3] = True
+        elif not sub_conditions[4] and sub_conditions[3]:
+            hand_i_bolt = over_dict.get((4, 10)) or over_dict.get((10, 4))
+            if not hand_i_bolt:
+                away_time += 1
+                if (away_time > 8) and not (over_dict.get((4, 12)) or over_dict.get((12, 4))):
+                    if not (over_dict.get((4, 12)) or over_dict.get((12, 4))):
+                        gui.update_substep(4)
+                        sub_conditions[4] = True
+
+        if all(sub_conditions[0:5]):
+            print("Step 5 done")
+            gui.mark_step_done(DONE)
+
+    pedal_time = 0
+    sub_conditions = [False for _ in range(7)]
+    while current_step == 5:
+        # ['found hands', 'found pedal', 'hand holding pedal', 'screwing pedal into crank', 'screwed pedal into crank']
+        data = cv_queue.get()
+        num_class_detected = len(data)
+
+        # SUB 0 : is there a hand?
+        if not sub_conditions[0]:
+            hand_count, hands_det = logic_tools.find_hands(data)
+            if hand_count:
+                # procedure[current_step].update_description(emoji.emojize("Found Hands 👍"))
+                gui.update_substep(0)
+                sub_conditions[0] = True
+
+        # SUB 1 : is there a pedal wrench? (index = 7)
+        if not sub_conditions[1] and sub_conditions[0] == True:
+            ped_count, ped_det = logic_tools.find_class(data, 11)
+            if ped_count:
+                # procedure[current_step].update_description(u'Found pedal👍')
+                gui.update_substep(1)
+                sub_conditions[1] = True
+        # Add rotating condition
+        # SUB 2 : are they overlapped? hand holding spindle?
+        over_count = 0
+        over_dict = {}
+        if num_class_detected > 1:
+            over_count, over_det, over_dict = logic_tools.find_overlapping(data)
+        # print(over_dict)
+        # SUB 3 : leaving right hand + increasing left hand
+        if not sub_conditions[2] and sub_conditions[1] == True:
+            if over_dict.get((4, 11)) or over_dict.get((11, 4)):
+                # procedure[current_step].update_description(u'Hand holding pedal 👍')
+                gui.update_substep(2)
+                # print("Intersection of hand and pedal: ",over_dict.get((4,11)) or over_dict.get((11,4)))
+                sub_conditions[2] = True
+        if not sub_conditions[4] and sub_conditions[1] == True:
+            crank_i_pedal = over_dict.get((12, 11)) or over_dict.get((12, 11))
+            # crank_i_bolt = over_dict.get((12,10)) or over_dict.get((10,12))
+            if crank_i_pedal:
+                if crank_i_pedal < 0.05:
+                    pedal_time += 1
+                    if not sub_conditions[3]:
+                        if pedal_time > 2:
+                            # procedure[current_step].update_description(u'Screwing pedal into crank arm...')
+                            gui.update_substep(3)
+                            sub_conditions[3] = True
+                    elif pedal_time > 45:
+                        # procedure[current_step].update_description(u'Screwed pedal into crank arm')
+                        gui.update_substep(4)
+                        sub_conditions[4] = True
+        if sub_conditions[4] and not sub_conditions[5]:
+            hand_i_pedal = over_dict.get((4, 11)) or over_dict.get((4, 11))
+            if not hand_i_pedal:
+                gui.update_substep(5)
+                sub_conditions[5] = True
+        if all(sub_conditions[0:6]):
+            print("everything done")
+            gui.mark_step_done(DONE)
+
+    # current_step = 6
+    # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
+    while not terminate.is_set() and current_step == 6:
+        print(f"In Step {current_step + 1} Now")
+        step_runtime = step7_validator()
+        print(f"Step 7 runtime={step_runtime} secs")
+        gui.mark_step_done(DONE)
+        terminate.set()
 
 
 # ===================== Step Logics ============================
@@ -959,7 +919,7 @@ def step7_validator():
 
         if condition_persistor.verify():
             initial_stage_satisfied = True
-            print(f"{time.time() - t1} seconds")
+            # print(f"{time.time() - t1} seconds")
         else:
             condition_persistor.persist()
 
@@ -1020,7 +980,7 @@ def step7_validator():
             else:
                 continue
 
-            print(f"num rotations = {num_rotations}")
+            # print(f"num rotations = {num_rotations}")
             if sensor_data['num_rotations'] >= MIN_ROTATION and condition_persistor.verify():
                 in_progress_stage_satisfied = True
 
@@ -1179,7 +1139,7 @@ class DisplayGUI:
 
         # clear out and initialize procedure + step count
         procedure = []
-        current_step = 4
+        current_step = 0
 
         # dummy steps
         # TODO: define steps & their individual criteria
@@ -1242,8 +1202,10 @@ class DisplayGUI:
                 description = "Secure the Crank Arm with the little bolt (bolt in left image) by placing it into the axle hole\
                     \n Then, turn it clockwise with your fingers to tighten it"
                 status = NOT_DONE
-                substeps = ['5.1 - found hands', '5.2 -found crank arm', '5.3 -screwing bolt into crank arm',
-                            '5.4 -screwed bolt into crank arm', '5.4 -detached hand and bolt']
+                substeps = ['5.1 - found hands', '5.2 -found crank arm',
+                            '5.3 -screwing bolt into crank arm',
+                            '5.4 -screwed bolt into crank arm',
+                            '5.4 -detached hand and bolt']
                 pictures = ['step5.1.png', 'step5.2.png']
 
             if i == 5:
@@ -1251,8 +1213,11 @@ class DisplayGUI:
                 description = "Place the pedal into the other side of the Crank Arm \
                 \nThen, tighten the bolt on the other side of the pedal to secure it"
                 status = NOT_DONE
-                substeps = ['6.1 - found hands', '6.2 -found pedal', '6.3 -hand holding pedal',
-                            '6.4 -screwing pedal into crank', '6.5 -screwed pedal into crank',
+                substeps = ['6.1 - found hands',
+                            '6.2 -found pedal',
+                            '6.3 -hand holding pedal',
+                            '6.4 -screwing pedal into crank',
+                            '6.5 -screwed pedal into crank',
                             '6.6 -detached hand and pedal']
                 pictures = ['step6.png']
 
@@ -1402,9 +1367,8 @@ class DisplayGUI:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--weights', nargs='+', type=str, default='VAR_B40E40_Transfer_Fine-Tune_0-0001.pt', help='model.pt path(s)')
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/install5-7.mov',
+    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstall.MOV',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')

@@ -237,14 +237,15 @@ def camera_sensor_frame_match(x, sr=10, fps=17):
 
 # ==================== PERSISTOR CLASS =========================
 class Persistor:
-    def __init__(self, frames: int, condition_name):
+    def __init__(self, frames: int, condition_name, output=False):
         self.condition = frames
         self.counter = 0
         self.name = condition_name
+        self.output = output
 
     def persist(self):
         self.counter += 1
-        print(f"[{self.name}] Persisted ({self.counter}/{self.condition}).")
+        if self.output: print(f"[{self.name}] Persisted ({self.counter}/{self.condition}).")
 
     def verify(self):
         return self.counter >= self.condition
@@ -252,4 +253,4 @@ class Persistor:
     def reset(self):
         if np.random.random() < 0.8:
             self.counter = 0
-            print(f"[{self.name}] Disrupted ({self.counter}/{self.condition}).")
+            if self.output: print(f"[{self.name}] Disrupted ({self.counter}/{self.condition}).")
