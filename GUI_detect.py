@@ -34,14 +34,14 @@ from collections import Counter
 current_step = 0
 procedure = []
 gui = None
-flag = False
+detect_ready = threading.Event()
 cv_queue = queue.Queue()
 sensor_queue = queue.Queue()
 terminate = threading.Event()
 sensor_in_use = threading.Event()
 
 def detect(save_img=False):
-    global gui, flag, cv_queue
+    global gui, cv_queue
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
     save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
@@ -198,10 +198,8 @@ def detect(save_img=False):
                             save_path += '.mp4'
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
-
-        if not flag:
-            flag = True  # start GUI
-            time.sleep(2)  # let GUI start up
+        
+        detect_ready.set()
 
         # Stream results
         if view_img:
@@ -295,6 +293,31 @@ def decision_logic():
     # build substeps for step 1
     gui.build_substeps(procedure[current_step])
 
+    # So basically run the validators sequentially when we revert to make sure we restart the validation properly
+    while not terminate.is_set():
+        step1_validator()
+
+        step2_validator()
+
+        step3_validator()
+
+        step4_validator()
+
+        step5_validator()
+
+        step6_validator()
+
+        # current_step = 6
+        # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
+        while current_step == 6: # step 6 is written differently, so we have a for loop here NOTE: might wanna refactor the other steps to be like this one
+            print(f"In Step {current_step + 1} Now")
+            step_runtime = step7_validator()
+            print(f"Step 7 runtime={step_runtime} secs")
+            gui.mark_step_done(DONE)
+            terminate.set()
+
+# ===================== Step Logics ============================
+def step1_validator():
     # variables for trendline, must be initalize outside of steps
     # Sub3
     s3_prev_dist_R_Spindle = -math.inf
@@ -446,7 +469,8 @@ def decision_logic():
 
         # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
 
-    # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
+def step2_validator():
+     # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
     # Both Hand hold Bracket
     # Single Hand Tighten
     sub_conditions = [False for i in range(9)]
@@ -563,6 +587,7 @@ def decision_logic():
             print("Step 2 Done")
             gui.mark_step_done(DONE)
 
+def step3_validator():
     # Detections Expected: Left Hand, Right Hand, Double-flats Wrench, (DoubleFlatBottomBracket), (Spindle)
     s4_prev_wrench_xmin = math.inf
     s4_prev_wrench_ymax = math.inf
@@ -678,7 +703,8 @@ def decision_logic():
         if all(sub_conditions):
             print("Step 3 Done")
             gui.mark_step_done(DONE)
-
+            
+def step4_validator():
     # Detections Expected: Left Hand, Right Hand, CrankArm, (DoubleFlatBottomBracket), (Spindle)
     sub_conditions = [False for i in range(4)]
     while current_step == 3:
@@ -727,7 +753,8 @@ def decision_logic():
         if all(sub_conditions):
             print("Step 4 Done")
             gui.mark_step_done(DONE)
-
+        
+def step5_validator():
     # Detections Expected: Left Hand, Right Hand, Bolt, CrankArm
     sub_conditions = [False for _ in range(5)]
     bolt_time = 0
@@ -785,7 +812,8 @@ def decision_logic():
         if all(sub_conditions[0:5]):
             print("Step 5 done")
             gui.mark_step_done(DONE)
-
+            
+def step6_validator():
     pedal_time = 0
     sub_conditions = [False for _ in range(7)]
     while current_step == 5:
@@ -845,18 +873,6 @@ def decision_logic():
         if all(sub_conditions[0:6]):
             print("everything done")
             gui.mark_step_done(DONE)
-
-    # current_step = 6
-    # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
-    while not terminate.is_set() and current_step == 6:
-        print(f"In Step {current_step + 1} Now")
-        step_runtime = step7_validator()
-        print(f"Step 7 runtime={step_runtime} secs")
-        gui.mark_step_done(DONE)
-        terminate.set()
-
-
-# ===================== Step Logics ============================
 
 def step7_validator():
     """
@@ -1074,10 +1090,9 @@ class DisplayGUI:
 
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
-        self.substep.pack(side="left", fill="both", expand=True)
-        self.substep_header = tk.Label(self.substep, text="Substep Progress", bg=dark_theme_background, anchor='w',
-                                       justify="left", font=("Arial", 24, 'bold'))
-        self.substep_header.pack(pady=(10, 0))
+        self.substep.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
+        self.substep_header = tk.Label(self.substep, text="Substep Progress", font=("Arial", 24, 'bold'), justify="center", bg=dark_theme_background)
+        self.substep_header.pack(fill='x')
 
         # list of Tkinter labels for substeps
         self.substep_list = []
@@ -1111,16 +1126,21 @@ class DisplayGUI:
         self.procedure_list.pack(side="right", fill="both",
                                  expand=True)  # pack after resizing ensures procedure list is correct size
 
+        # Button frame
+        self.button_frame = tk.Label(self.right_frame, fg='white', bg=dark_theme_background, borderwidth=5)
+        self.button_frame.pack(fill="x", expand=False)
+        
         # Revert button
-        self.revert = tk.Label(self.right_frame, fg='white', bg=revert_button_color, text="Revert - undo step",
+        self.revert = tk.Label(self.button_frame, fg='white', bg=revert_button_color, text="Revert - undo step",
                                borderwidth=5)
-        self.revert.pack(fill="x", expand=False, padx=(10, 25), pady=(20, 10))
-        self.revert.bind("<ButtonRelease-1>", self.revert_mark_done)
 
         # Override button
-        self.override = tk.Label(self.right_frame, fg='white', bg=override_button_color, text="Override - mark done",
+        self.override = tk.Label(self.button_frame, fg='white', bg=override_button_color, text="Override - mark done",
                                  borderwidth=5)
-        self.override.pack(fill="x", expand=False, padx=(10, 25), pady=(20, 10))
+
+        self.revert.pack(fill='both',expand=True, padx=(20, 10), pady=(10, 10),side='left')
+        self.revert.bind("<ButtonRelease-1>", self.revert_mark_done)
+        self.override.pack(fill='both',expand=True, padx=(10, 20), pady=(10, 10), side='right')
         self.override.bind("<ButtonRelease-1>", self.override_mark_done)
 
         # Decision logic ===================================
@@ -1150,7 +1170,7 @@ class DisplayGUI:
                 description = "Put the spindle (rod-like object in left image) into the axle hole \
                     \nOnce complete, it should look like the image on the right"
                 status = NOT_DONE
-                substeps = ['1.1 - Detect Hand',
+                substeps = ['1.1 - Detect Hands',
                             '1.2 - Detect Spindle',
                             '1.3 - Hand holding Spindle',
                             '1.4 - Passed to Left Hand',
@@ -1165,13 +1185,13 @@ class DisplayGUI:
                     \nThen, turn it clockwise with you fingers to tighten it"
                 status = NOT_DONE
                 substeps = ['2.1 - Detect Hands',
-                            '2.2 - Detect double flat bottom bracket',
-                            '2.3 - Detect spindle',
+                            '2.2 - Detect Fouble Flat Bottom Bracket',
+                            '2.3 - Detect Spindle',
                             '2.4 - Single Hand Holding Double Flat Bottom Bracket',
                             '2.5 - Detect Complete Overlap of Double Flat Bottom Bracket over Spindle',
                             '2.6 - Detect Right Hand completely over Double Flat Bottom Bracket',
                             '2.7 - Hand Out of Field',
-                            '2.8 - Confirm  Double Flat Bottom Bracket completely overlaps Spindle',
+                            '2.8 - Confirm Double Flat Bottom Bracket completely overlaps Spindle',
                             '2.9 - Double Flat Bottom Bracket and Spindle left behind only']
                 pictures = ['step2.png']
 
@@ -1202,10 +1222,11 @@ class DisplayGUI:
                 description = "Secure the Crank Arm with the little bolt (bolt in left image) by placing it into the axle hole\
                     \n Then, turn it clockwise with your fingers to tighten it"
                 status = NOT_DONE
-                substeps = ['5.1 - found hands', '5.2 -found crank arm',
-                            '5.3 -screwing bolt into crank arm',
-                            '5.4 -screwed bolt into crank arm',
-                            '5.4 -detached hand and bolt']
+                substeps = ['5.1 - Detect Hands',
+                            '5.2 - Detect Crank Arm',
+                            '5.3 - Screwing Bolt into Crank Arm',
+                            '5.4 - Screwed Bolt into Crank Arm',
+                            '5.4 - Detached Hands and Bolt']
                 pictures = ['step5.1.png', 'step5.2.png']
 
             if i == 5:
@@ -1213,22 +1234,22 @@ class DisplayGUI:
                 description = "Place the pedal into the other side of the Crank Arm \
                 \nThen, tighten the bolt on the other side of the pedal to secure it"
                 status = NOT_DONE
-                substeps = ['6.1 - found hands',
-                            '6.2 -found pedal',
-                            '6.3 -hand holding pedal',
-                            '6.4 -screwing pedal into crank',
-                            '6.5 -screwed pedal into crank',
-                            '6.6 -detached hand and pedal']
+                substeps = ['6.1 - Detect Hands',
+                            '6.2 - Detect Pedal',
+                            '6.3 - Hand holding Pedal',
+                            '6.4 - Screwing Pedal into Crank',
+                            '6.5 - Screwed Pedal into Crank',
+                            '6.6 - Detached Hand and Pedal']
                 pictures = ['step6.png']
 
             if i == 6:
                 title = f"Step {i + 1}, Pedal Tightening with Crank Arm"
                 description = "Use the Pedal Locking Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
-                substeps = ['7.1 - Pedal is placed in bolted-down crank arm',
-                            '7.2 - Secure pedal using pedal wrench (rotation 1/3)',
-                            '7.3 - Secure pedal using pedal wrench (rotation 2/3)',
-                            '7.4 - Secure pedal using pedal wrench (rotation 3/3)']
+                substeps = ['7.1 - Pedal is placed in Bolted-down Crank Arm',
+                            '7.2 - Secure Pedal using Pedal Wrench (rotation 1/3)',
+                            '7.3 - Secure Pedal using Pedal Wrench (rotation 2/3)',
+                            '7.4 - Secure Pedal using Pedal Wrench (rotation 3/3)']
                 pictures = ['step7.1.png', 'step7.2.png']
 
             s = Step(i, title, description, status, substeps, pictures)
@@ -1292,8 +1313,8 @@ class DisplayGUI:
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):
-            temp = tk.Label(self.substep, bg=dark_theme_background, text=s, anchor='w')
-            temp.pack()
+            temp = tk.Label(self.substep, text=s,justify='left',anchor='w', bg=dark_theme_background)
+            temp.pack(fill='x')
             self.substep_list.append(temp)
 
     def update_substep(self, index):
@@ -1315,8 +1336,7 @@ class DisplayGUI:
         detect_thread.daemon = True
         detect_thread.start()
 
-        while not flag:
-            time.sleep(1)
+        detect_ready.wait() # let GUI start up
 
         self.loading_frame.destroy()
 
@@ -1338,7 +1358,8 @@ class DisplayGUI:
             loading_frames.append(temp)
 
         i = 0
-        while not flag:
+                
+        while not detect_ready.is_set():
             i = i + 1
             i = i % frames
 
