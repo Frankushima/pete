@@ -1443,7 +1443,7 @@ def connect_to_server(ip, port):
                         if not recv_data:
                             if data_block:
                                 # Remaining data that hsan't been processed
-                                sensor_detect(data_block)                  # Place holder for what datablock needs to be used for
+                                sensor_detect(data_block)                  # Process datablock
                             break  # No more data, connection closed
 
 
@@ -1452,7 +1452,7 @@ def connect_to_server(ip, port):
                             line, complete_data = complete_data.split('\n', 1)
                             data_block.append(line.strip())
                             if len(data_block) == 3:
-                                sensor_detect(data_block)                  # Place holder for what datablock needs to be used for
+                                sensor_detect(data_block)                  # Process datablock
                                 data_block = []  # Reset for next block of data
                 except Exception as e:
                     print(f"Error during connection or file operation: {e}")
@@ -1477,6 +1477,18 @@ def connect_to_server(ip, port):
         finally:
             s.close()
             sensor_ready.clear()
+
+def start_sensors(e):
+    threads = []
+    for tool in servers:
+        thread = threading.Thread(target=connect_to_server, args=(tool['ip'], tool['port']))
+        thread.start()
+        threads.append(thread)
+
+    print("ACTIVE THREADS: ", threads)
+
+    for thread in threads:
+        thread.join()  # Wait for all threads to complete
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -1503,16 +1515,9 @@ if __name__ == '__main__':
     print(opt)
     # check_requirements(exclude=('pycocotools', 'thop'))
 
-    threads = []
-    for tool in servers:
-        thread = threading.Thread(target=connect_to_server, args=(tool['ip'], tool['port']))
-        thread.start()
-        threads.append(thread)
-
-    print("ACTIVE THREADS: ", threads)
-
-    for thread in threads:
-        thread.join()  # Wait for all threads to complete
+    run_sensors = threading.Thread(target=start_sensors, args=[])
+    run_sensors.daemon = True
+    run_sensors.start()
 
     root = tk.Tk()
     gui = DisplayGUI(root)
