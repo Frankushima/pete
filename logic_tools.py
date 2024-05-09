@@ -204,27 +204,6 @@ def bbox_intersection(box1, box2):
 def bbox_area(box):
     return (box[2] - box[0]) * (box[3] - box[1])
 
-def process(file):
-    with open(file, 'r') as file:
-        lines = [line.strip() for line in file if line.strip() != '']
-    lines = [lines[i:i + 4] for i in range(0, len(lines), 4)]
-
-    full = []
-    for t, line in enumerate(lines):
-        data_dict = {}
-        for sensor in line:
-            readings = sensor.split()
-
-            key = readings[0]
-            if key == "Temp:":
-                key = "Temp"
-                values = readings[1]
-            else:
-                values = [float(val) for val in readings[1:] if not ":" in val]
-            data_dict[key] = values
-        full.append(data_dict)
-    return [entry['Angle'][2] for entry in full]
-
 def camera_sensor_frame_match(x, sr=10, fps=17):
     """
     check if the x-th sensor sample matches to a frame in the camera
