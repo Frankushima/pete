@@ -1323,7 +1323,7 @@ class DisplayGUI:
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):
-            temp = tk.Label(self.substep, text=s,justify='left',anchor='w', bg=dark_theme_background)
+            temp = tk.Label(self.substep, text=s,justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 16))
             temp.pack(fill='x')
             self.substep_list.append(temp)
 
