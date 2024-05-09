@@ -1098,6 +1098,22 @@ class DisplayGUI:
         runtime_thread.daemon = True
         runtime_thread.start()
 
+        # Tools Detected
+        self.tools = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
+        self.tools.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
+
+        self.tools_header = tk.Label(self.tools, text="Tools", font=("Arial", 24, 'bold'), justify="center", bg=dark_theme_background)
+        self.tools_header.pack(fill='x')
+
+        image = ImageTk.PhotoImage(Image.open('hand.png').resize((200,300)))
+        self.tools_image_label = tk.Label(self.tools, image=image)
+        self.tools_image_label.image = image
+        self.tools_image_label.pack()
+
+
+        # list of Tkinter labels for substeps
+        self.tools_list = []
+
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
         self.substep.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
@@ -1320,6 +1336,25 @@ class DisplayGUI:
         photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
         self.livestream.config(image=photo)
         self.livestream.image = photo
+
+    def build_tools(self, step):
+        for i, s in enumerate(step.tools):
+            temp = tk.Label(self.tools, text=s,justify='left',anchor='w', bg=dark_theme_background)
+            temp.pack(fill='x')
+            self.tools_list.append(temp)
+
+    def update_tools(self, index):
+        # if self.substep_list[index]['text'][-1] == "\u2713":
+        #     return
+        # self.substep_list[index]['fg'] = substep_complete_text_color
+        # self.substep_list[index]['text'] += " \u2713 "
+        pass
+
+    def clear_tools(self):
+        # for _ in range(len(self.substep_list)):
+        #     temp = self.substep_list.pop()
+        #     temp.destroy()
+        pass
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):
