@@ -1,4 +1,5 @@
 import socket
+import sys
 import threading
 import time
 
@@ -11,8 +12,8 @@ import time
 
 # EDUROAM IPS
 servers = [
-    {'ip': '169.231.202.206', 'port': 8000},  # Double Flat
-    {'ip': '169.231.193.109', 'port': 8001},  # Pedal Wrench
+    # {'ip': '169.231.202.206', 'port': 8000},  # Double Flat
+    {'ip': '169.231.193.5', 'port': 8001},  # Pedal Wrench
     ]
 
 def connect_to_server(ip, port):
@@ -33,12 +34,13 @@ def connect_to_server(ip, port):
                         if not recv_data:
                             if data_block:
                                 # Remaining data that hsan't been processed
-                                process_data_block(port, data_block)                  # Place holder for what datablock needs to be used for
+                                print("in process")                  # Place holder for what datablock needs to be used for
                             break  # No more data, connection closed
 
                         complete_data += recv_data
                         while '\n' in complete_data:
                             line, complete_data = complete_data.split('\n', 1)
+                            if line.strip() == "": continue
                             data_block.append(line.strip())
                             if len(data_block) == 3:
                                 process_data_block(port, data_block)                  # Place holder for what datablock needs to be used for
@@ -62,11 +64,52 @@ def connect_to_server(ip, port):
         finally:
             s.close()
 
+
+sample = 0
+ewma_sd = 0  # ewma sensor data
+sum_sd = 0
+num_rot = 0
 def process_data_block(port, data_block):
     # Placeholder function to process data blocks
-    print(f"Processed data block from {port}:")
-    for line in data_block:
-        print(line)
+    data_dict = {}
+    global sample, ewma_sd, sum_sd, num_rot
+    # print(data_block)
+    for sensor in data_block:
+        readings = sensor.split()
+
+        key = readings[0]
+        if key == "Temp:":
+            key = "Temp"
+            values = readings[1]
+        else:
+            values = [float(val) for val in readings[1:] if not ":" in val]
+        data_dict[key] = values
+    angle_z = data_dict['Angle'][2]
+
+    # Read in + a lil EWMA
+    if sample == 0:
+        ewma_sd = angle_z * 1.4
+    else:
+        ewma_sd = 0.75 * ewma_sd + 0.25 * angle_z * 1.4  # 1.4 for calibration purposes
+    sum_sd += ewma_sd
+    sample += 1
+
+    # Process (should also increase sampling rate since processing takes time?)
+    is_rotating = sum_sd / sample
+    num_rot = max(num_rot, int(sum_sd / 360))
+
+    data = {
+        'inst_rotation': ewma_sd,
+        'rotating': is_rotating,
+        'degrees': sum_sd,
+        'num_rotations': num_rot,
+    }
+
+    sys.stdout.write(f"\r{data}")
+
+    # print(data)
+
+
 
 def main():
     threads = []

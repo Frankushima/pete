@@ -985,13 +985,14 @@ def step7_validator():
             continue
 
         if not sensor_in_use.is_set(): sensor_in_use.set()
-        # print("Sensor set")
+        print("Sensor set")
 
         pedal = data[data[:, 5] == PEDAL][0]
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
         sensor_data = sensor_queue.get()
+        print(sensor_data)
         # print(sensor_data, "\n")
         if sensor_data['rotating']:
             # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
@@ -1181,7 +1182,7 @@ class DisplayGUI:
 
         # clear out and initialize procedure + step count
         procedure = []
-        current_step = 0
+        current_step = 6
 
         # dummy steps
         # TODO: define steps & their individual criteria
@@ -1366,6 +1367,7 @@ class DisplayGUI:
 
         # Sensor  ===================================
         sensor_ready.wait()
+        print("sensor ready")
         sensor_thread = threading.Thread(target=sensor_detect, args=[])
         sensor_thread.daemon = True
         sensor_thread.start()
@@ -1412,15 +1414,11 @@ class DisplayGUI:
 
 # Note the port numbers!!!
 # # MY HOUSE AND FRANKS
-# servers = [
-#     {'ip': '192.168.0.135', 'port': 80},  # Double Flat
-#     {'ip': '192.168.0.177', 'port': 81},  # Pedal Wrench
-#     ]
 
 # EDUROAM IPS
 servers = [
-    {'ip': '169.231.202.206', 'port': 8000},  # Double Flat
-    {'ip': '169.231.193.109', 'port': 8001},  # Pedal Wrench
+    # {'ip': '169.231.202.206', 'port': 8000},  # Double Flat
+    {'ip': '169.231.195.102', 'port': 8001},  # Pedal Wrench
 ]
 
 sensor_ready = threading.Event()
@@ -1446,12 +1444,12 @@ def connect_to_server(ip, port):
                                 sensor_detect(data_block)                  # Process datablock
                             break  # No more data, connection closed
 
-
                         complete_data += recv_data
                         while '\n' in complete_data:
                             line, complete_data = complete_data.split('\n', 1)
                             data_block.append(line.strip())
                             if len(data_block) == 3:
+                                # print(data_block)
                                 sensor_detect(data_block)                  # Process datablock
                                 data_block = []  # Reset for next block of data
                 except Exception as e:
@@ -1478,9 +1476,10 @@ def connect_to_server(ip, port):
             s.close()
             sensor_ready.clear()
 
-def start_sensors(e):
+def start_sensors():
     threads = []
     for tool in servers:
+        print(tool['ip'])
         thread = threading.Thread(target=connect_to_server, args=(tool['ip'], tool['port']))
         thread.start()
         threads.append(thread)
@@ -1493,7 +1492,7 @@ def start_sensors(e):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstall.MOV',
+    parser.add_argument('--source', type=str, default='test_videos/step7_shorter.mov',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
