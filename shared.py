@@ -37,6 +37,7 @@ space_grey_background = '#485063'
 override_button_color = "#932323"
 revert_button_color = '#0B6623'
 substep_complete_text_color = '#0B6623'
+unwanted_tools_color = '#FF0000'
 live_stream_url = "https://api.ucsb.edu/dining/cams/v2/stream/carrillo?ucsb-api-key=0AVpBy0HfloWaEQHPanHTGSYmXusaNIJ"
 # live_stream_url = "http://d3rlna7iyyu8wu.cloudfront.net/DolbyVision_Atmos/profile8.1_DASH/p8.1.mpd"
 
@@ -55,3 +56,19 @@ CRANK_ARM_NON_CHAINSIDE = 9
 BOLT = 10
 PEDAL = 11
 CRANK_ARM = 12
+
+class_index = {
+    'adjustablemonkeywrench': 0,
+    'monkeywrench': 1,
+    'allenkey': 2,
+    'doubleflatswrench': 3,
+    'hand': 4,
+    'pedallockringwrench': 5,
+    'crankremover': 6,
+    'spindle': 7,
+    'doubleFlatsBottomBracket': 8,
+    'crankArmNonChainSide': 9,
+    'bolt': 10,
+    'pedal': 11,
+    'crankArm': 12
+}

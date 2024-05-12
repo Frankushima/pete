@@ -27,21 +27,7 @@ from enum import Enum
 
 import math
 
-class_index = {
-    'adjustablemonkeywrench': 0,
-    'monkeywrench': 1,
-    'allenkey': 2,
-    'doubleflatswrench': 3,
-    'hand': 4,
-    'pedallockringwrench': 5,
-    'crankremover': 6,
-    'spindle': 7,
-    'doubleFlatsBottomBracket': 8,
-    'crankArmNonChainSide': 9,
-    'bolt': 10,
-    'pedal': 11,
-    'crankArm': 12
-}
+from shared import *
 
 class Trendline(Enum):
     INITIALIZE = -1

@@ -298,6 +298,9 @@ def decision_logic():
     # build substeps for step 1
     gui.build_substeps(procedure[current_step])
 
+    # build tools_list for step 1
+    gui.build_tools(procedure[current_step])
+
     # So basically run the validators sequentially when we revert to make sure we restart the validation properly
     while not terminate.is_set():
         step1_validator()
@@ -334,6 +337,17 @@ def step1_validator():
     while current_step == 0:
         data = cv_queue.get()
         num_class_detected = len(data)
+
+        # don't need 
+        # unneeded tools check (only need hands)
+        wanted_class = [SPINDLE, HAND]
+
+
+        for det in data:
+            if det[5] not in wanted_class:
+                keys = list(class_index.keys())
+                values = list(class_index.values())    
+                gui.update_unwant_tools(keys[values.index(det[5])])
 
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
@@ -604,6 +618,7 @@ def step3_validator():
             double_flat_wrench_count, _ = logic_tools.find_class(data, DOUBLE_FLATS_WRENCH)
             if double_flat_wrench_count == 1:
                 gui.update_substep(0)
+                gui.update_tools(0)
                 sub_conditions[0] = True
 
         # find hands
@@ -776,6 +791,7 @@ def step5_validator():
             if crank_count:
                 # procedure[current_step].update_description(u'Found crank arm👍')
                 gui.update_substep(1)
+                gui.update_tools(0)
                 sub_conditions[1] = True
         # Add rotating condition
         # SUB 2 : are they overlapped? hand holding spindle?
@@ -1105,14 +1121,14 @@ class DisplayGUI:
         self.tools_header = tk.Label(self.tools, text="Tools", font=("Arial", 24, 'bold'), justify="center", bg=dark_theme_background)
         self.tools_header.pack(fill='x')
 
-        image = ImageTk.PhotoImage(Image.open('hand.png').resize((200,300)))
-        self.tools_image_label = tk.Label(self.tools, image=image)
-        self.tools_image_label.image = image
-        self.tools_image_label.pack()
-
-
-        # list of Tkinter labels for substeps
+        # list of Tkinter labels for tools
         self.tools_list = []
+
+        # list for unwanted tools
+        self.unwant_tools_simple_list = []
+
+        # list of Tkinter labels for unwanted tools
+        self.unwant_tools_tkinter_list = []
 
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
@@ -1204,6 +1220,7 @@ class DisplayGUI:
                             '1.6 - Spindle leaves Left Hand',
                             '1.7 - Spindle Alone']
                 pictures = ['step1.1.png', 'step1.2.png']
+                tools = []
 
             if i == 1:
                 title = f"Step {i + 1}, Bottom Bracket Installation and Tightening"
@@ -1211,7 +1228,7 @@ class DisplayGUI:
                     \nThen, turn it clockwise with you fingers to tighten it"
                 status = NOT_DONE
                 substeps = ['2.1 - Detect Hands',
-                            '2.2 - Detect Fouble Flat Bottom Bracket',
+                            '2.2 - Detect Double Flat Bottom Bracket',
                             '2.3 - Detect Spindle',
                             '2.4 - Single Hand Holding Double Flat Bottom Bracket',
                             '2.5 - Detect Complete Overlap of Double Flat Bottom Bracket over Spindle',
@@ -1220,6 +1237,7 @@ class DisplayGUI:
                             '2.8 - Confirm Double Flat Bottom Bracket completely overlaps Spindle',
                             '2.9 - Double Flat Bottom Bracket and Spindle left behind only']
                 pictures = ['step2.png']
+                tools = []
 
             if i == 2:
                 title = f"Step {i + 1}, Tighten with Double Flat Wrench"
@@ -1232,6 +1250,7 @@ class DisplayGUI:
                             '3.5 - Tighten by THREE Rotations and Complete overlap Detected',
                             '3.6 - Hand Out of Field']
                 pictures = ['step3.png']
+                tools = [['Double Flats Wrench', 'doubleflatswrench.png', DOUBLE_FLATS_WRENCH]]
 
             if i == 3:
                 title = f"Step {i + 1}, Crank Arm Installation"
@@ -1242,6 +1261,7 @@ class DisplayGUI:
                             '4.3 - Detect Single Hand Overlap over Crank Arm',
                             '4.4 - Hand Out of Field']
                 pictures = ['step4.png']
+                tools = []
 
             if i == 4:
                 title = f"Step {i + 1}, Bolt Installation"
@@ -1254,6 +1274,7 @@ class DisplayGUI:
                             '5.4 - Screwed Bolt into Crank Arm',
                             '5.4 - Detached Hands and Bolt']
                 pictures = ['step5.1.png', 'step5.2.png']
+                tools = []
 
             if i == 5:
                 title = f"Step {i + 1}, Pedal Installation"
@@ -1267,18 +1288,20 @@ class DisplayGUI:
                             '6.5 - Screwed Pedal into Crank',
                             '6.6 - Detached Hand and Pedal']
                 pictures = ['step6.png']
+                tools = []
 
             if i == 6:
                 title = f"Step {i + 1}, Pedal Tightening with Crank Arm"
-                description = "Use the Pedal Locking Wrench (left image) to secure the bolt on the other side of the pedal"
+                description = "Use the Pedal Lockring Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = ['7.1 - Pedal is placed in Bolted-down Crank Arm',
                             '7.2 - Secure Pedal using Pedal Wrench (rotation 1/3)',
                             '7.3 - Secure Pedal using Pedal Wrench (rotation 2/3)',
                             '7.4 - Secure Pedal using Pedal Wrench (rotation 3/3)']
                 pictures = ['step7.1.png', 'step7.2.png']
+                tools = [['Pedal Lockring Wrench', 'pedallockringwrench.png', PEDAL_LOCKRING_WRENCH]]
 
-            s = Step(i, title, description, status, substeps, pictures)
+            s = Step(i, title, description, status, substeps, pictures, tools)
 
             procedure.append(s)
 
@@ -1300,9 +1323,13 @@ class DisplayGUI:
         if isLastStep: return
 
         self.clear_substeps()
+        self.clear_tools()
+
         current_step += 1
+
         procedure[current_step].update_status(IN_PROGRESS, isFocus=True)
         self.build_substeps(procedure[current_step])
+        self.build_tools(procedure[current_step])
 
     def override_mark_done(self, e):
         """
@@ -1317,6 +1344,8 @@ class DisplayGUI:
 
         # allow for reverting last step
         self.clear_substeps()
+        self.clear_tools()
+
         isLastStep = current_step == len(procedure) - 1
         if isLastStep and (procedure[current_step].status == DONE or procedure[current_step].status == DONE_OV):
             procedure[current_step].update_status(IN_PROGRESS)
@@ -1324,7 +1353,9 @@ class DisplayGUI:
             current_step -= 1
             procedure[current_step].update_status(IN_PROGRESS)
             procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)
+
         self.build_substeps(procedure[current_step])
+        self.build_tools(procedure[current_step])
         self.canvas.yview_moveto(-1.0)
 
     def set_frame(self, frame):
@@ -1338,23 +1369,37 @@ class DisplayGUI:
         self.livestream.image = photo
 
     def build_tools(self, step):
-        for i, s in enumerate(step.tools):
-            temp = tk.Label(self.tools, text=s,justify='left',anchor='w', bg=dark_theme_background)
+        for tool in step.tools:
+            temp = tk.Label(self.tools, text=tool[0],justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 16))
             temp.pack(fill='x')
             self.tools_list.append(temp)
 
     def update_tools(self, index):
-        # if self.substep_list[index]['text'][-1] == "\u2713":
-        #     return
-        # self.substep_list[index]['fg'] = substep_complete_text_color
-        # self.substep_list[index]['text'] += " \u2713 "
-        pass
+        if not procedure[current_step].tools or self.tools_list[index]['text'][-1] == "\u2713":
+            return
 
+        self.tools_list[index]['fg'] = substep_complete_text_color
+        self.tools_list[index]['text'] += " \u2713 "
+
+    def update_unwant_tools(self, cls):
+        if cls in self.unwant_tools_simple_list:
+            return
+        
+        temp = tk.Label(self.tools, text=cls + "\u274c",justify='left',anchor='w', bg=dark_theme_background, fg=unwanted_tools_color, font=("Arial", 16))
+        temp.pack(fill='x')
+        self.unwant_tools_tkinter_list.append(temp)
+        self.unwant_tools_simple_list.append(cls)
+    
     def clear_tools(self):
-        # for _ in range(len(self.substep_list)):
-        #     temp = self.substep_list.pop()
-        #     temp.destroy()
-        pass
+        for _ in range(len(self.tools_list)):
+            temp = self.tools_list.pop()
+            temp.destroy()
+        
+        for _ in range(len(self.unwant_tools_tkinter_list)):
+            temp = self.unwant_tools_tkinter_list.pop()
+            temp.destroy()
+
+        self.unwant_tools_simple_list = []
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):
