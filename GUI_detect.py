@@ -870,7 +870,6 @@ def step6_validator():
                 gui.update_substep(5)
                 sub_conditions[5] = True
         if all(sub_conditions[0:6]):
-            print("everything done")
             gui.mark_step_done(DONE)
 
 def step7_validator():
