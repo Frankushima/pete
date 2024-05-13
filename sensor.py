@@ -34,7 +34,7 @@ def connect_to_server(ip, port):
                         if not recv_data:
                             if data_block:
                                 # Remaining data that hsan't been processed
-                                print("in process")                  # Place holder for what datablock needs to be used for
+                                process_data_block(port, data_block)                  # Place holder for what datablock needs to be used for
                             break  # No more data, connection closed
 
                         complete_data += recv_data

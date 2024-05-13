@@ -221,11 +221,13 @@ def detect(save_img=False):
 sample = 0
 ewma_sd = 0  # ewma sensor data
 sum_sd = 0
+num_rot = 0
+is_rotating = False
 def sensor_detect(data_block):
     """
     Dummy sensor
     """
-    global sensor_in_use, terminate, sensor_queue, sample, ewma_sd, sum_sd
+    global sensor_in_use, terminate, sensor_queue, sample, ewma_sd, sum_sd, num_rot, is_rotating
 
     while not terminate.is_set():
         # if not using sensor tool, simply ignore data
@@ -251,20 +253,24 @@ def sensor_detect(data_block):
                 ewma_sd = angle_z * 1.4
             else:
                 ewma_sd = 0.75 * ewma_sd + 0.25 * angle_z * 1.4  # 1.4 for calibration purposes
-            sum_sd += ewma_sd
+            sum_sd_i = sum_sd + ewma_sd
             sample += 1
 
-            # Matching camera and sensor via sampling rate (ceiling)
-            if not camera_sensor_frame_match(x=sample): continue
-
             # Process (should also increase sampling rate since processing takes time?)
-            is_rotating = ewma_sd > 3.5  # lmao
+            is_rotating = (
+                              1 if is_rotating else -1) * 0.5 + sum_sd_i - sum_sd > 0.5  # it's rotating if this value is increasing
+            num_rot = max(num_rot, int(sum_sd / 360))
 
             data = {
+                'sub diffx': sum_sd_i - sum_sd,
+                'avg_rot': sum_sd_i,
                 'rotating': is_rotating,
                 'degrees': sum_sd,
-                'num_rotations': int(sum_sd / 360),
+                'num_rotations': num_rot,
+                'sample': sample
             }
+
+            sum_sd = sum_sd_i
 
             sensor_queue.put(data)
             time.sleep(0.1)  # a bit delay to prevent thread dying
