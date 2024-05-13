@@ -69,10 +69,11 @@ sample = 0
 ewma_sd = 0  # ewma sensor data
 sum_sd = 0
 num_rot = 0
+is_rotating = False
 def process_data_block(port, data_block):
     # Placeholder function to process data blocks
     data_dict = {}
-    global sample, ewma_sd, sum_sd, num_rot
+    global sample, ewma_sd, sum_sd, num_rot, is_rotating
     # print(data_block)
     for sensor in data_block:
         readings = sensor.split()
@@ -91,19 +92,24 @@ def process_data_block(port, data_block):
         ewma_sd = angle_z * 1.4
     else:
         ewma_sd = 0.75 * ewma_sd + 0.25 * angle_z * 1.4  # 1.4 for calibration purposes
-    sum_sd += ewma_sd
+    sum_sd_i = sum_sd + ewma_sd
     sample += 1
 
     # Process (should also increase sampling rate since processing takes time?)
-    is_rotating = sum_sd / sample
+    is_rotating = (1 if is_rotating else -1) * 0.5 + sum_sd_i - sum_sd > 0.5  # it's rotating if this value is increasing
     num_rot = max(num_rot, int(sum_sd / 360))
 
+
     data = {
-        'inst_rotation': ewma_sd,
+        'sub diffx': sum_sd_i - sum_sd,
+        'avg_rot': sum_sd_i,
         'rotating': is_rotating,
         'degrees': sum_sd,
         'num_rotations': num_rot,
+        'sample': sample
     }
+
+    sum_sd = sum_sd_i
 
     sys.stdout.write(f"\r{data}")
 
