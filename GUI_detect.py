@@ -338,16 +338,9 @@ def step1_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
-        # don't need 
         # unneeded tools check (only need hands)
         wanted_class = [SPINDLE, HAND]
-
-
-        for det in data:
-            if det[5] not in wanted_class:
-                keys = list(class_index.keys())
-                values = list(class_index.values())    
-                gui.update_unwant_tools(keys[values.index(det[5])])
+        gui.update_unwant_tools(data, wanted_class)
 
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
@@ -490,6 +483,9 @@ def step2_validator():
     while current_step == 1:
         data = cv_queue.get()
         num_class_detected = len(data)
+        
+        wanted_class = [DOUBLEFLATS_BOTTOM_BRACKET, HAND, SPINDLE]
+        gui.update_unwant_tools(data, wanted_class)
 
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
@@ -613,6 +609,9 @@ def step3_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
+        wanted_class = [DOUBLE_FLATS_WRENCH, DOUBLEFLATS_BOTTOM_BRACKET, HAND, SPINDLE]
+        gui.update_unwant_tools(data, wanted_class)
+
         # find double flat wrench
         if not sub_conditions[0]:
             double_flat_wrench_count, _ = logic_tools.find_class(data, DOUBLE_FLATS_WRENCH)
@@ -725,6 +724,9 @@ def step4_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
+        wanted_class = [CRANK_ARM, DOUBLEFLATS_BOTTOM_BRACKET, HAND, SPINDLE]
+        gui.update_unwant_tools(data, wanted_class)
+
         # find crank arm
         if not sub_conditions[0]:
             double_flat_wrench_count, _ = logic_tools.find_class(data, CRANK_ARM)
@@ -777,6 +779,9 @@ def step5_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
+        wanted_class = [BOLT, CRANK_ARM, HAND]
+        gui.update_unwant_tools(data, wanted_class)
+
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
             hand_count, hands_det = logic_tools.find_hands(data)
@@ -791,7 +796,6 @@ def step5_validator():
             if crank_count:
                 # procedure[current_step].update_description(u'Found crank arm👍')
                 gui.update_substep(1)
-                gui.update_tools(0)
                 sub_conditions[1] = True
         # Add rotating condition
         # SUB 2 : are they overlapped? hand holding spindle?
@@ -835,6 +839,9 @@ def step6_validator():
         # ['found hands', 'found pedal', 'hand holding pedal', 'screwing pedal into crank', 'screwed pedal into crank']
         data = cv_queue.get()
         num_class_detected = len(data)
+
+        wanted_class = [HAND, PEDAL, PEDAL_LOCKRING_WRENCH, CRANK_ARM, BOLT]
+        gui.update_unwant_tools(data, wanted_class)
 
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
@@ -921,6 +928,9 @@ def step7_validator():
         - bolt is in crank arm: bolt bbox is (mostly) fully within crank arm bbox (given camera is overhead)
     Q: Do these conditions have to be constantly validated throughout the step?
     """
+    data = cv_queue.get()
+    wanted_class = [HAND, PEDAL, PEDAL_LOCKRING_WRENCH, CRANK_ARM, BOLT]
+    gui.update_unwant_tools(data, wanted_class)
 
     initial_stage_satisfied = False
     condition_persistor = Persistor(frames=30, condition_name="Initial Stage")
@@ -963,6 +973,16 @@ def step7_validator():
 
     gui.update_substep(0)  # substep 1 satisfied
 
+    # Check for Tool Existing
+    substeptwo_in_progress = True
+    while substeptwo_in_progress:
+        # Check if there is a Pedal Lockring Wrench
+        pedal_wrench, _ = logic_tools.find_class(data, PEDAL_LOCKRING_WRENCH)
+        if pedal_wrench == 1:
+            gui.update_substep(1)
+            gui.update_tools(0)
+            substeptwo_in_progress = False
+        
     """
     B) In-progress conditions to be satisfied:
         1. hand intersecting greatly with pedal wrench (for the duration of rotation being sensed/detected)
@@ -1004,8 +1024,9 @@ def step7_validator():
             # takes max to determine the iou of the most likely hand holding wrench (???)
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
 
+            # HACK: Hardcoding 'num_rotations'+1 to match with the added substep
             if sensor_data['num_rotations'] != num_rotations:
-                gui.update_substep(sensor_data['num_rotations'])
+                gui.update_substep(sensor_data['num_rotations']+1)
                 num_rotations = sensor_data['num_rotations']
 
             if num_rotations < MIN_ROTATION and condition_persistor.verify():
@@ -1124,11 +1145,8 @@ class DisplayGUI:
         # list of Tkinter labels for tools
         self.tools_list = []
 
-        # list for unwanted tools
-        self.unwant_tools_simple_list = []
-
         # list of Tkinter labels for unwanted tools
-        self.unwant_tools_tkinter_list = []
+        self.unwant_tools_tkinter_list = [None for _ in range(len(class_index))]
 
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
@@ -1250,7 +1268,7 @@ class DisplayGUI:
                             '3.5 - Tighten by THREE Rotations and Complete overlap Detected',
                             '3.6 - Hand Out of Field']
                 pictures = ['step3.png']
-                tools = [['Double Flats Wrench', 'doubleflatswrench.png', DOUBLE_FLATS_WRENCH]]
+                tools = [DOUBLE_FLATS_WRENCH]
 
             if i == 3:
                 title = f"Step {i + 1}, Crank Arm Installation"
@@ -1295,11 +1313,12 @@ class DisplayGUI:
                 description = "Use the Pedal Lockring Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = ['7.1 - Pedal is placed in Bolted-down Crank Arm',
-                            '7.2 - Secure Pedal using Pedal Wrench (rotation 1/3)',
-                            '7.3 - Secure Pedal using Pedal Wrench (rotation 2/3)',
-                            '7.4 - Secure Pedal using Pedal Wrench (rotation 3/3)']
+                            '7.2 - Pedal Lockring Wrench is Detected',
+                            '7.3 - Secure Pedal using Pedal Wrench (rotation 1/3)',
+                            '7.4 - Secure Pedal using Pedal Wrench (rotation 2/3)',
+                            '7.5 - Secure Pedal using Pedal Wrench (rotation 3/3)']
                 pictures = ['step7.1.png', 'step7.2.png']
-                tools = [['Pedal Lockring Wrench', 'pedallockringwrench.png', PEDAL_LOCKRING_WRENCH]]
+                tools = [PEDAL_LOCKRING_WRENCH]
 
             s = Step(i, title, description, status, substeps, pictures, tools)
 
@@ -1370,7 +1389,7 @@ class DisplayGUI:
 
     def build_tools(self, step):
         for tool in step.tools:
-            temp = tk.Label(self.tools, text=tool[0],justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 16))
+            temp = tk.Label(self.tools, text=str(logic_tools.get_keys_from_value(class_index, tool)),justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 16))
             temp.pack(fill='x')
             self.tools_list.append(temp)
 
@@ -1381,25 +1400,44 @@ class DisplayGUI:
         self.tools_list[index]['fg'] = substep_complete_text_color
         self.tools_list[index]['text'] += " \u2713 "
 
-    def update_unwant_tools(self, cls):
-        if cls in self.unwant_tools_simple_list:
-            return
+    def update_unwant_tools(self, data, wanted_class):
+        # set up
+        detected_class = []
+        for det in data:
+            detected_class.append(det[5])
+
+        unwanted_detected_class = []
+        for cls_idx in detected_class:     
+            if cls_idx not in wanted_class:
+                unwanted_detected_class.append(int(cls_idx))
         
-        temp = tk.Label(self.tools, text=cls + "\u274c",justify='left',anchor='w', bg=dark_theme_background, fg=unwanted_tools_color, font=("Arial", 16))
-        temp.pack(fill='x')
-        self.unwant_tools_tkinter_list.append(temp)
-        self.unwant_tools_simple_list.append(cls)
+        # look for no longer detecting unwanted tools in the tkinter list and forget them
+        for idx, label in enumerate(self.unwant_tools_tkinter_list):
+            if label is not None and idx not in unwanted_detected_class:
+                label.pack_forget()
+                label = None
+            
+            elif label is not None and idx in unwanted_detected_class:
+                unwanted_detected_class.remove(idx)
+                
+        # build up the new unwanted tool list 
+        for cls_idx in unwanted_detected_class:
+            temp = tk.Label(self.tools, text= str(logic_tools.get_keys_from_value(class_index, cls_idx)) + "\u274c",justify='left',anchor='w', bg=dark_theme_background, fg=unwanted_tools_color, font=("Arial", 16))
+            temp.pack(fill='x')
+
+            self.unwant_tools_tkinter_list[cls_idx] = temp
+
     
     def clear_tools(self):
         for _ in range(len(self.tools_list)):
             temp = self.tools_list.pop()
             temp.destroy()
         
-        for _ in range(len(self.unwant_tools_tkinter_list)):
-            temp = self.unwant_tools_tkinter_list.pop()
-            temp.destroy()
-
-        self.unwant_tools_simple_list = []
+        for label in self.unwant_tools_tkinter_list:
+            if label is not None:
+                label.pack_forget()
+                label.destroy()
+                label = None
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):

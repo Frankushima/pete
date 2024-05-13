@@ -221,6 +221,17 @@ def camera_sensor_frame_match(x, sr=10, fps=17):
         if i * fps // sr == x: return True
     return False
 
+# Make sure each value only corresponds to 1 key 
+def get_keys_from_value(dict, value):
+    keys = list(dict.keys())
+    values = list(dict.values())
+
+    try:
+        return keys[values.index(value)]
+    
+    except ValueError:
+        return None
+
 # ==================== PERSISTOR CLASS =========================
 class Persistor:
     def __init__(self, frames: int, condition_name, output=False):
