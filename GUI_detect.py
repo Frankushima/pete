@@ -809,7 +809,7 @@ def step5_validator():
                         sub_conditions[4] = True
 
         if all(sub_conditions[0:5]):
-            print("Step 5 done")
+            print("Step 5 Done")
             gui.mark_step_done(DONE)
             
 def step6_validator():
@@ -894,7 +894,7 @@ def step7_validator():
     
     # a lil timer
     start_time = time.time()
-    print(f"Started step 7")
+    print(f"Started Step 7")
 
     """
     A) Initial stage condition to be satisfied (i.e. condition for starting stage):
