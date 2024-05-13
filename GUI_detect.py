@@ -318,16 +318,10 @@ def decision_logic():
 # ===================== Step Logics ============================
 def step1_validator():
     # variables for trendline, must be initalize outside of steps
-    # Sub3
-    s3_prev_dist_R_Spindle = -math.inf
-    s3_trend_R_Spindle = logic_tools.Trendline.INITIALIZE
-
-    s3_prev_dist_L_Spindle = math.inf
-    s3_trend_L_Spindle = logic_tools.Trendline.INITIALIZE
 
     # Sub5
-    s5_prev_dist_Spindle = -math.inf
-    s5_trend_Spindle = logic_tools.Trendline.INITIALIZE
+    s3_prev_dist_Spindle = -math.inf
+    s3_trend_Spindle = logic_tools.Trendline.INITIALIZE
 
     # Detections Expected: Left Hand, Right Hand, Spindle
     sub_conditions = [False for i in range(5)]
@@ -364,7 +358,7 @@ def step1_validator():
 
         # SUB 3 : leaving hand
         if not sub_conditions[3] and sub_conditions[2] == True:
-            s5_curr_dist_Spindle = -1
+            s3_curr_dist_Spindle = -1
 
             if num_class_detected > 1:
                 hand_count, hands_det = logic_tools.find_hands(data)
@@ -375,18 +369,18 @@ def step1_validator():
                     spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
                     hand_center = logic_tools.get_box_center(*hands_det[0][:4])
 
-                    s5_curr_dist_Spindle = logic_tools.get_euclidean_distance(hand_center, spindle_center)
+                    s3_curr_dist_Spindle = logic_tools.get_euclidean_distance(hand_center, spindle_center)
 
                     # Spindle Leaving Right Hand
-                    if s5_curr_dist_Spindle > s5_prev_dist_Spindle:
-                        s5_trend_Spindle = logic_tools.Trendline.INCREASING
+                    if s3_curr_dist_Spindle > s3_prev_dist_Spindle:
+                        s3_trend_Spindle = logic_tools.Trendline.INCREASING
 
-                    elif s5_curr_dist_Spindle < s5_prev_dist_Spindle:
-                        s5_trend_Spindle = logic_tools.Trendline.DECREASING
+                    elif s3_curr_dist_Spindle < s3_prev_dist_Spindle:
+                        s3_trend_Spindle = logic_tools.Trendline.DECREASING
 
-                    s5_prev_dist_Spindle = s5_curr_dist_Spindle
+                    s3_prev_dist_Spindle = s3_curr_dist_Spindle
 
-            if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
+            if num_class_detected == 1 and s3_trend_Spindle == logic_tools.Trendline.INCREASING:
                 gui.update_substep(3)
                 sub_conditions[3] = True
 
