@@ -330,7 +330,7 @@ def step1_validator():
     s5_trend_Spindle = logic_tools.Trendline.INITIALIZE
 
     # Detections Expected: Left Hand, Right Hand, Spindle
-    sub_conditions = [False for i in range(7)]
+    sub_conditions = [False for i in range(5)]
     while current_step == 0:
         data = cv_queue.get()
         num_class_detected = len(data)
@@ -362,72 +362,8 @@ def step1_validator():
                         gui.update_substep(2)
                         sub_conditions[2] = True
 
-        # SUB 3 : leaving right hand + increasing left hand
-        # TODO: Fix IOU not gonna work for varying size for bounding box
-        # Using Euclidean Distane for now
+        # SUB 3 : leaving hand
         if not sub_conditions[3] and sub_conditions[2] == True:
-            s3_curr_dist_R_Spindle = -1
-            s3_curr_dist_L_Spindle = -1
-
-            if num_class_detected > 1:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                spindle_count, spindle_det = logic_tools.find_class(data, 7)
-
-                if hand_count == 2 and spindle_count == 1:
-                    L_hand_det, R_hand_det = logic_tools.RL_hands(hands_det)
-
-                    spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
-
-                    # Right Hand
-                    R_hand_center = logic_tools.get_box_center(*R_hand_det[:4])
-                    s3_curr_dist_R_Spindle = logic_tools.get_euclidean_distance(R_hand_center, spindle_center)
-
-                    # Spindle Leaving Right Hand
-                    if s3_curr_dist_R_Spindle > s3_prev_dist_R_Spindle:
-                        s3_trend_R_Spindle = logic_tools.Trendline.INCREASING
-
-                    elif s3_curr_dist_R_Spindle < s3_prev_dist_R_Spindle:
-                        s3_trend_R_Spindle = logic_tools.Trendline.DECREASING
-
-                    s3_prev_dist_R_Spindle = s3_curr_dist_R_Spindle
-
-                    # Left Hand
-                    L_hand_center = logic_tools.get_box_center(*L_hand_det[:4])
-                    s3_curr_dist_L_Spindle = logic_tools.get_euclidean_distance(L_hand_center, spindle_center)
-
-                    # Spindling Going to Left Hand
-                    if s3_curr_dist_L_Spindle < s3_prev_dist_L_Spindle:
-                        s3_trend_L_Spindle = logic_tools.Trendline.DECREASING
-
-                    elif s3_curr_dist_L_Spindle > s3_prev_dist_L_Spindle:
-                        s3_trend_L_Spindle = logic_tools.Trendline.INCREASING
-
-                    s3_prev_dist_L_Spindle = s3_curr_dist_L_Spindle
-
-                    # print(f"Left Trend: {s3_trend_L_Spindle} Right Trend: {s3_trend_R_Spindle}")
-                if hand_count == 1 and spindle_count == 1 and s3_trend_R_Spindle == logic_tools.Trendline.INCREASING and s3_trend_L_Spindle == logic_tools.Trendline.DECREASING:
-                    gui.update_substep(3)
-                    sub_conditions[3] = True
-
-        # SUB 4 : passed to left hand
-        if not sub_conditions[4] and sub_conditions[3] == True:
-            over_count = 0
-
-            if num_class_detected > 1:
-                over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                if over_count == 1:
-                    single_overlap_pair = over_det[0]
-                    # if the overlapping is between spindle and hand
-                    if ((single_overlap_pair[0][5] == SPINDLE and single_overlap_pair[1][5] ==
-                         HAND) or
-                            (single_overlap_pair[0][5] == HAND and single_overlap_pair[1][5] ==
-                             SPINDLE)):
-                        gui.update_substep(4)
-                        sub_conditions[4] = True
-
-        # SUB 5 : leaving left hand
-        if not sub_conditions[5] and sub_conditions[4] == True:
             s5_curr_dist_Spindle = -1
 
             if num_class_detected > 1:
@@ -451,16 +387,16 @@ def step1_validator():
                     s5_prev_dist_Spindle = s5_curr_dist_Spindle
 
             if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
-                gui.update_substep(5)
-                sub_conditions[5] = True
+                gui.update_substep(3)
+                sub_conditions[3] = True
 
-        # SUB 6 : no overlap spingle left behind
-        if not sub_conditions[6] and sub_conditions[5] == True:
+        # SUB 4 : no overlap spingle left behind
+        if not sub_conditions[4] and sub_conditions[3] == True:
             spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
 
             if spindle_count == 1 and num_class_detected == 1:
-                gui.update_substep(6)
-                sub_conditions[6] = True
+                gui.update_substep(4)
+                sub_conditions[4] = True
 
         if all(sub_conditions):
             print("Step 1 Done")
@@ -1183,10 +1119,8 @@ class DisplayGUI:
                 substeps = ['1.1 - Detect Hands',
                             '1.2 - Detect Spindle',
                             '1.3 - Hand holding Spindle',
-                            '1.4 - Passed to Left Hand',
-                            '1.5 - Spindle on Left Hand',
-                            '1.6 - Spindle leaves Left Hand',
-                            '1.7 - Spindle Alone']
+                            '1.4 - Spindle leaves Hand',
+                            '1.5 - Spindle Alone']
                 pictures = ['step1.1.png', 'step1.2.png']
 
             if i == 1:
@@ -1195,7 +1129,7 @@ class DisplayGUI:
                     \nThen, turn it clockwise with you fingers to tighten it"
                 status = NOT_DONE
                 substeps = ['2.1 - Detect Hands',
-                            '2.2 - Detect Fouble Flat Bottom Bracket',
+                            '2.2 - Detect Double Flat Bottom Bracket',
                             '2.3 - Detect Spindle',
                             '2.4 - Single Hand Holding Double Flat Bottom Bracket',
                             '2.5 - Detect Complete Overlap of Double Flat Bottom Bracket over Spindle',
