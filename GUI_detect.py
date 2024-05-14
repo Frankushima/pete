@@ -27,12 +27,15 @@ from utils.torch_utils import select_device, load_classifier, time_synchronized,
 current_step = 0
 procedure = []
 gui = None
-detect_ready = threading.Event()
+
 cv_queue = queue.Queue()
 sensor_queue = queue.Queue()
+
+detect_ready = threading.Event()
 terminate = threading.Event()
 sensor_in_use = threading.Event()
-
+sensor_ready = threading.Event()
+sensor_data_block = queue.Queue()
 
 def detect(save_img=False):
     global gui, cv_queue
@@ -1114,6 +1117,14 @@ class DisplayGUI:
         runtime_thread.daemon = True
         runtime_thread.start()
 
+        # Create a label to display the sensor connection status
+        self.sensor_status_label = tk.Label(self.performance, bg=dark_theme_background, text="Sensor: Signal Lost...",  fg="red")
+        self.sensor_status_label.pack(padx=(100, 0))
+
+        sensor_status_thread = threading.Thread(target=self._update_sensor_status)
+        sensor_status_thread.daemon = True
+        sensor_status_thread.start()
+
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
         self.substep.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
@@ -1413,7 +1424,15 @@ class DisplayGUI:
 
             time.sleep(1)  # Update the label every 1 second
 
+    def _update_sensor_status(self):
+        global sensor_ready
+        while True:
+            if sensor_ready.is_set():
+                self.sensor_status_label.config(text="Sensor: Connected", fg="green")
+            else:
+                self.sensor_status_label.config(text="Sensor: Disconnected", fg="red")
 
+            time.sleep(1)
 
 # Note the port numbers!!!
 # # MY HOUSE AND FRANKS
@@ -1424,8 +1443,6 @@ servers = [
     {'ip': '169.231.198.117', 'port': 8001},  # Pedal Wrench
 ]
 
-sensor_ready = threading.Event()
-sensor_data_block = queue.Queue()
 def connect_to_server(ip, port):
     global sensor_data_block
     while True:
@@ -1457,6 +1474,11 @@ def connect_to_server(ip, port):
                             if len(data_block) == 3:
                                 sensor_data_block.put(data_block)
                                 data_block = []  # Reset for next block of data
+                except socket.timeout:
+                    print(f"Connection to {ip}:{port} timed out. Retrying...")
+                    s.close()  # Ensure the socket is closed before retrying
+                    sensor_ready.clear()
+                    time.sleep(1)  # Wait a bit before retrying to avoid hammering the server too quickly
                 except Exception as e:
                     print(f"Error during connection or file operation: {e}")
                     sensor_ready.clear()
