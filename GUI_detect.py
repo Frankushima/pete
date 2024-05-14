@@ -88,6 +88,7 @@ def detect(save_img=False):
 
     t0 = time.time()
 
+    fid = 0
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -223,19 +224,23 @@ ewma_sd = 0  # ewma sensor data
 sum_sd = 0
 num_rot = 0
 is_rotating = False
-def sensor_detect(data_block):
+DEGREES_IN_ROTATION = 280        # threshold for rotation (i.e. how many degrees make up 1 rotation)
+def sensor_detect():
     """
-    Dummy sensor
+    Sensor (is meant to calculate only CCW rotation)
     """
-    global sensor_in_use, terminate, sensor_queue, sample, ewma_sd, sum_sd, num_rot, is_rotating
+    global sensor_in_use, terminate
 
     while not terminate.is_set():
         # if not using sensor tool, simply ignore data
         if not sensor_in_use.is_set():
             time.sleep(1)
         else:
-            # print("sensor in use = ================================================")
+            # print("sensor in use = ========x========================================")
             data_dict = {}
+            global sensor_data_block, sensor_queue, sample, ewma_sd, sum_sd, num_rot, is_rotating
+
+            data_block = sensor_data_block.get()
             for sensor in data_block:
                 readings = sensor.split()
 
@@ -253,24 +258,26 @@ def sensor_detect(data_block):
                 ewma_sd = angle_z * 1.4
             else:
                 ewma_sd = 0.75 * ewma_sd + 0.25 * angle_z * 1.4  # 1.4 for calibration purposes
-            sum_sd_i = sum_sd + ewma_sd
+            sum_sd_i = max(0, sum_sd + ewma_sd)
             sample += 1
 
-            # Process (should also increase sampling rate since processing takes time?)
-            is_rotating = (
-                              1 if is_rotating else -1) * 0.5 + sum_sd_i - sum_sd > 0.5  # it's rotating if this value is increasing
-            num_rot = max(num_rot, int(sum_sd / 360))
+            # Processing: calculates if it's rotating based on previous and current reading
+            is_rotating = (1 if is_rotating else -1) * 0.3 + sum_sd_i - sum_sd > 0.5
+            num_rot = max(num_rot, int(sum_sd / DEGREES_IN_ROTATION))
 
             data = {
-                'sub diffx': sum_sd_i - sum_sd,
-                'avg_rot': sum_sd_i,
+                # 'sub diffx': sum_sd_i - sum_sd,
+                # 'avg_rot': sum_sd_i,
                 'rotating': is_rotating,
-                'degrees': sum_sd,
+                'degrees': sum_sd_i,
                 'num_rotations': num_rot,
                 'sample': sample
             }
 
             sum_sd = sum_sd_i
+
+            # take every 4th frame. FPS corresponds to stream FPS.
+            if not camera_sensor_frame_match(x=sample, sr=10, fps=30) or sample % 4 != 0: continue
 
             sensor_queue.put(data)
             time.sleep(0.1)  # a bit delay to prevent thread dying
@@ -990,7 +997,8 @@ def step7_validator():
                 data[data[:, 5] == HAND]) == 0:
             continue
 
-        if not sensor_in_use.is_set(): sensor_in_use.set()
+        if not sensor_in_use.is_set():
+            sensor_in_use.set()
         print("Sensor set")
 
         pedal = data[data[:, 5] == PEDAL][0]
@@ -998,7 +1006,7 @@ def step7_validator():
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
         sensor_data = sensor_queue.get()
-        print(sensor_data)
+        print(f"{sensor_data}")
         # print(sensor_data, "\n")
         if sensor_data['rotating']:
             # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
@@ -1424,11 +1432,13 @@ class DisplayGUI:
 # EDUROAM IPS
 servers = [
     # {'ip': '169.231.202.206', 'port': 8000},  # Double Flat
-    {'ip': '169.231.195.102', 'port': 8001},  # Pedal Wrench
+    {'ip': '169.231.198.117', 'port': 8001},  # Pedal Wrench
 ]
 
 sensor_ready = threading.Event()
+sensor_data_block = queue.Queue()
 def connect_to_server(ip, port):
+    global sensor_data_block
     while True:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -1447,16 +1457,16 @@ def connect_to_server(ip, port):
                         if not recv_data:
                             if data_block:
                                 # Remaining data that hsan't been processed
-                                sensor_detect(data_block)                  # Process datablock
+                                sensor_data_block.put(data_block)
                             break  # No more data, connection closed
 
                         complete_data += recv_data
                         while '\n' in complete_data:
                             line, complete_data = complete_data.split('\n', 1)
+                            if line.strip() == "": continue
                             data_block.append(line.strip())
                             if len(data_block) == 3:
-                                # print(data_block)
-                                sensor_detect(data_block)                  # Process datablock
+                                sensor_data_block.put(data_block)
                                 data_block = []  # Reset for next block of data
                 except Exception as e:
                     print(f"Error during connection or file operation: {e}")
