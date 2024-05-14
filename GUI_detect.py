@@ -88,7 +88,6 @@ def detect(save_img=False):
 
     t0 = time.time()
 
-    fid = 0
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -193,7 +192,7 @@ def detect(save_img=False):
                             save_path += '.mp4'
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
-
+        
         # allow GUI to set up properly before start (not needed on board)
         # detect_ready.set()
 
@@ -320,10 +319,10 @@ def decision_logic():
         step1_validator()
 
         step2_validator()
-
+        
         step3_validator()
-
-        step4_validator()
+        
+        step4_validator()        
 
         step5_validator()
 
@@ -331,7 +330,6 @@ def decision_logic():
 
         step_runtime = step7_validator()
         print(f"Step 7 runtime={step_runtime} secs")
-
 
 # ===================== Step Logics ============================
 def step1_validator():
@@ -486,9 +484,8 @@ def step1_validator():
 
         # print(f"Spindle: {spindle_count}, Hand: {hand_count}, Overlapping_Count: {over_count}, Overlapping_IOU: {iou}")
 
-
 def step2_validator():
-    # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
+     # Detections Expected: Left Hand, Right Hand, DoubleFlatBottomBracket, (Spindle)
     # Both Hand hold Bracket
     # Single Hand Tighten
     sub_conditions = [False for i in range(9)]
@@ -604,7 +601,6 @@ def step2_validator():
         if all(sub_conditions):
             print("Step 2 Done")
             gui.mark_step_done(DONE)
-
 
 def step3_validator():
     # Detections Expected: Left Hand, Right Hand, Double-flats Wrench, (DoubleFlatBottomBracket), (Spindle)
@@ -722,8 +718,7 @@ def step3_validator():
         if all(sub_conditions):
             print("Step 3 Done")
             gui.mark_step_done(DONE)
-
-
+            
 def step4_validator():
     # Detections Expected: Left Hand, Right Hand, CrankArm, (DoubleFlatBottomBracket), (Spindle)
     sub_conditions = [False for i in range(4)]
@@ -773,8 +768,7 @@ def step4_validator():
         if all(sub_conditions):
             print("Step 4 Done")
             gui.mark_step_done(DONE)
-
-
+        
 def step5_validator():
     # Detections Expected: Left Hand, Right Hand, Bolt, CrankArm
     sub_conditions = [False for _ in range(5)]
@@ -833,8 +827,7 @@ def step5_validator():
         if all(sub_conditions[0:5]):
             print("Step 5 done")
             gui.mark_step_done(DONE)
-
-
+            
 def step6_validator():
     pedal_time = 0
     sub_conditions = [False for _ in range(7)]
@@ -896,7 +889,6 @@ def step6_validator():
             print("everything done")
             gui.mark_step_done(DONE)
 
-
 def step7_validator():
     """
     StepValidator for step 7: using pedal lockring wrench to install pedal
@@ -913,10 +905,10 @@ def step7_validator():
     # sanity check for current step
     if current_step != 6:
         return -1
-
+    
     # current_step = 6
     # Detections Expected: Left Hand, Right Hand, Pedal Locking wrench, Pedal, CrankArm, Bolt
-
+    
     # a lil timer
     start_time = time.time()
     print(f"Started step 7")
@@ -997,16 +989,14 @@ def step7_validator():
                 data[data[:, 5] == HAND]) == 0:
             continue
 
-        if not sensor_in_use.is_set():
-            sensor_in_use.set()
-        print("Sensor set")
+        if not sensor_in_use.is_set(): sensor_in_use.set()
+        # print("Sensor set")
 
         pedal = data[data[:, 5] == PEDAL][0]
         hands = data[data[:, 5] == HAND]
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
         sensor_data = sensor_queue.get()
-        print(f"{sensor_data}")
         # print(sensor_data, "\n")
         if sensor_data['rotating']:
             # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
@@ -1033,10 +1023,10 @@ def step7_validator():
                 in_progress_stage_satisfied = True
 
     sensor_in_use.clear()
-
+    
     gui.mark_step_done(DONE)
     terminate.set()
-
+    
     return time.time() - start_time
 
 
@@ -1126,9 +1116,8 @@ class DisplayGUI:
 
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
-        self.substep.pack(padx=(80, 0), pady=(10, 0), side="left", fill="both", expand=True)
-        self.substep_header = tk.Label(self.substep, text="Substep Progress", font=("Arial", 24, 'bold'),
-                                       justify="center", bg=dark_theme_background)
+        self.substep.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
+        self.substep_header = tk.Label(self.substep, text="Substep Progress", font=("Arial", 24, 'bold'), justify="center", bg=dark_theme_background)
         self.substep_header.pack(fill='x')
 
         # list of Tkinter labels for substeps
@@ -1166,7 +1155,7 @@ class DisplayGUI:
         # Button frame
         self.button_frame = tk.Label(self.right_frame, fg='white', bg=dark_theme_background, borderwidth=5)
         self.button_frame.pack(fill="x", expand=False)
-
+        
         # Revert button
         self.revert = tk.Label(self.button_frame, fg='white', bg=revert_button_color, text="Revert - undo step",
                                borderwidth=5)
@@ -1175,9 +1164,9 @@ class DisplayGUI:
         self.override = tk.Label(self.button_frame, fg='white', bg=override_button_color, text="Override - mark done",
                                  borderwidth=5)
 
-        self.revert.pack(fill='both', expand=True, padx=(20, 10), pady=(10, 10), side='left')
+        self.revert.pack(fill='both',expand=True, padx=(20, 10), pady=(10, 10),side='left')
         self.revert.bind("<ButtonRelease-1>", self.revert_mark_done)
-        self.override.pack(fill='both', expand=True, padx=(10, 20), pady=(10, 10), side='right')
+        self.override.pack(fill='both',expand=True, padx=(10, 20), pady=(10, 10), side='right')
         self.override.bind("<ButtonRelease-1>", self.override_mark_done)
 
         # Decision logic ===================================
@@ -1196,7 +1185,7 @@ class DisplayGUI:
 
         # clear out and initialize procedure + step count
         procedure = []
-        current_step = 6
+        current_step = 0
 
         # dummy steps
         # TODO: define steps & their individual criteria
@@ -1350,7 +1339,7 @@ class DisplayGUI:
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):
-            temp = tk.Label(self.substep, text=s, justify='left', anchor='w', bg=dark_theme_background)
+            temp = tk.Label(self.substep, text=s,justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 16))
             temp.pack(fill='x')
             self.substep_list.append(temp)
 
@@ -1373,7 +1362,7 @@ class DisplayGUI:
         detect_thread.daemon = True
         detect_thread.start()
 
-        detect_ready.wait()  # let GUI start up
+        detect_ready.wait() # let GUI start up
 
         self.loading_frame.destroy()
 
@@ -1397,7 +1386,7 @@ class DisplayGUI:
             loading_frames.append(temp)
 
         i = 0
-
+                
         while not detect_ready.is_set():
             i = i + 1
             i = i % frames
@@ -1508,7 +1497,7 @@ def start_sensors():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default='Demo_Only_B40.pt', help='model.pt path(s)')
-    parser.add_argument('--source', type=str, default='test_videos/step7_shorter.mov',
+    parser.add_argument('--source', type=str, default='test_videos/bottomBracketInstall.MOV',
                         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
