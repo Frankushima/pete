@@ -701,7 +701,7 @@ def step5_validator():
                 sub_conditions[0] = True
         # ['found hands', 'found crank arm', 'screwing bolt into crank arm', 'screwed bolt into crank arm'']
         # SUB 1 : is there a pedal wrench? (index = 7)
-        if not sub_conditions[1]:
+        if not sub_conditions[1] and sub_conditions[0] == True:
             crank_count, crank_det = logic_tools.find_class(data, 12)
             if crank_count:
                 # procedure[current_step].update_description(u'Found crank arm👍')
