@@ -1000,7 +1000,7 @@ def step7_validator():
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
         sensor_data = sensor_queue.get()
-        # print(sensor_data, "\n")
+        print(sensor_data, "\n")
         if sensor_data['rotating']:
             # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
@@ -1440,7 +1440,7 @@ class DisplayGUI:
 # EDUROAM IPS
 servers = [
     # {'ip': '169.231.202.206', 'port': 8000},  # Double Flat
-    {'ip': '169.231.198.117', 'port': 8001},  # Pedal Wrench
+    {'ip': '169.231.192.50', 'port': 8001},  # Pedal Wrench
 ]
 
 def connect_to_server(ip, port):
