@@ -946,6 +946,7 @@ def step7_validator():
     in_progress_stage_satisfied = False
     num_rotations = 0
     condition_persistor = Persistor(frames=10, condition_name="1 rotation")
+    pedal_wrench_loc_history = None 
     MIN_ROTATION = 3
     global sensor_queue, sensor_in_use
     while not in_progress_stage_satisfied:
@@ -960,37 +961,79 @@ def step7_validator():
         if not sensor_in_use.is_set(): sensor_in_use.set()
         # print("Sensor set")
 
-        pedal = data[data[:, 5] == PEDAL][0]
-        hands = data[data[:, 5] == HAND]
-        pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
+        has_rotation_been_counted = False
+        
+        pedal_count, pedal_det = logic_tools.find_class(data, PEDAL)
+        hand_count, hand_det = logic_tools.find_class(data, HAND)
+        pedal_wrench_count, pedal_wrench_det = logic_tools.find_class(data,PEDAL_LOCKRING_WRENCH)
+        
+        pedal = pedal_det[0]
+        hands = hand_det
+        pedal_wrench = pedal_wrench_det[0]
+        
+        # HACK: I have to comment out the sensor code since its a blocking operation
+        # sensor_data = sensor_queue.get() 
+        # print(sensor_data, "\n")
+       
+        # print(pedal_wrench)
+        
+        # Pure CV rotation tracking
+        # Basically I take the max X and Y distance from the pedal's center to the wrench's edge 
+        # Then I determine if its in the NE or SW orientation and count rotations from there
+        pedal_center = logic_tools.get_box_center(pedal[0],pedal[1],pedal[2],pedal[3])
+        
+        if abs(pedal_center[0] - pedal_wrench[0]) > abs(pedal_center[0] - pedal_wrench[2]):
+            pedal_wrench_x_distance = pedal_center[0] - pedal_wrench[0]
+        else:
+            pedal_wrench_x_distance = pedal_center[0] - pedal_wrench[2]
+        
+        if abs(pedal_center[1] - pedal_wrench[1]) > abs(pedal_center[1] - pedal_wrench[3]):
+            pedal_wrench_y_distance = pedal_center[1] - pedal_wrench[1]
+        else:
+            pedal_wrench_y_distance = pedal_center[1] - pedal_wrench[3]
+        
+        # print(pedal_wrench_x_distance, pedal_wrench_y_distance)
+        
+        if pedal_wrench_x_distance > 0 and pedal_wrench_y_distance > 0:
+            if pedal_wrench_loc_history != "NE":
+                pedal_wrench_loc_history = "NE"
+                print("NE")
+            
+        if pedal_wrench_x_distance < 0 and pedal_wrench_y_distance < 0:
+            if pedal_wrench_loc_history == "NE":
+                print("SW")
+                num_rotations += 1
+                if num_rotations <= MIN_ROTATION:
+                    gui.update_substep(num_rotations+1)
+                else:
+                    in_progress_stage_satisfied = True
+                pedal_wrench_loc_history = "SW"
+        
+        # if sensor_data['rotating']:
+        #     # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
+        #     pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
+        #     # takes max to determine the iou of the most likely hand holding wrench (???)
+        #     hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
 
-        sensor_data = sensor_queue.get()
-        print(sensor_data, "\n")
-        if sensor_data['rotating']:
-            # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
-            pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
-            # takes max to determine the iou of the most likely hand holding wrench (???)
-            hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
+        #     # HACK: Hardcoding 'num_rotations'+1 to match with the added substep
+        #     if sensor_data['num_rotations'] != num_rotations:
+        #         gui.update_substep(sensor_data['num_rotations']+1)
+        #         num_rotations = sensor_data['num_rotations']
+        #         has_rotation_been_counted = True
 
-            # HACK: Hardcoding 'num_rotations'+1 to match with the added substep
-            if sensor_data['num_rotations'] != num_rotations:
-                gui.update_substep(sensor_data['num_rotations']+1)
-                num_rotations = sensor_data['num_rotations']
+        #     if num_rotations < MIN_ROTATION and condition_persistor.verify():
+        #         # one rotation completed. Reset Persistor for next rotation
+        #         condition_persistor.reset()
 
-            if num_rotations < MIN_ROTATION and condition_persistor.verify():
-                # one rotation completed. Reset Persistor for next rotation
-                condition_persistor.reset()
+        #     if pedal_pedal_lockring_iou > 0.1 and hand_pedal_lockring_iou > 0:
+        #         condition_persistor.persist()
+        #         # TODO: when to reset on error?
+        #     else:
+        #         continue
 
-            if pedal_pedal_lockring_iou > 0.1 and hand_pedal_lockring_iou > 0:
-                condition_persistor.persist()
-                # TODO: when to reset on error?
-            else:
-                continue
-
-            # print(f"num rotations = {num_rotations}")
-            if sensor_data['num_rotations'] >= MIN_ROTATION and condition_persistor.verify():
-                in_progress_stage_satisfied = True
-
+        #     # print(f"num rotations = {num_rotations}")
+        #     if sensor_data['num_rotations'] >= MIN_ROTATION and condition_persistor.verify():
+        #         in_progress_stage_satisfied = True
     sensor_in_use.clear()
     
     gui.mark_step_done(DONE)
@@ -1521,7 +1564,7 @@ def connect_to_server(ip, port):
                                 sensor_data_block.put(data_block)
                                 data_block = []  # Reset for next block of data
                 except socket.timeout:
-                    print(f"Connection to {ip}:{port} timed out. Retrying...")
+                    # print(f"Connection to {ip}:{port} timed out. Retrying...")
                     s.close()  # Ensure the socket is closed before retrying
                     sensor_ready.clear()
                     time.sleep(1)  # Wait a bit before retrying to avoid hammering the server too quickly
@@ -1531,7 +1574,7 @@ def connect_to_server(ip, port):
                     break
             print(f"Disconnected from server {ip}:{port}")
         except socket.timeout:
-                print(f"Connection to {ip}:{port} timed out. Retrying...")
+                # print(f"Connection to {ip}:{port} timed out. Retrying...")
                 s.close()  # Ensure the socket is closed before retrying
                 sensor_ready.clear()
                 time.sleep(1)  # Wait a bit before retrying to avoid hammering the server too quickly
