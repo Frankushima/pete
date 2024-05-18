@@ -27,21 +27,7 @@ from enum import Enum
 
 import math
 
-class_index = {
-    'adjustablemonkeywrench': 0,
-    'monkeywrench': 1,
-    'allenkey': 2,
-    'doubleflatswrench': 3,
-    'hand': 4,
-    'pedallockringwrench': 5,
-    'crankremover': 6,
-    'spindle': 7,
-    'doubleFlatsBottomBracket': 8,
-    'crankArmNonChainSide': 9,
-    'bolt': 10,
-    'pedal': 11,
-    'crankArm': 12
-}
+from shared import *
 
 class Trendline(Enum):
     INITIALIZE = -1
@@ -234,6 +220,17 @@ def camera_sensor_frame_match(x, sr=10, fps=17):
     for i in range(x):
         if i * fps // sr == x: return True
     return False
+
+# Make sure each value only corresponds to 1 key 
+def get_keys_from_value(dict, value):
+    keys = list(dict.keys())
+    values = list(dict.values())
+
+    try:
+        return keys[values.index(value)]
+    
+    except ValueError:
+        return None
 
 # ==================== PERSISTOR CLASS =========================
 class Persistor:

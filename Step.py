@@ -3,7 +3,7 @@ import tkinter as tk
 from PIL import Image, ImageTk
 
 class Step:
-    def __init__(self, index, title, description, status, substeps, pictures):
+    def __init__(self, index, title, description, status, substeps, pictures, tools):
         self.title = title
         self.index = index
         self.description = description
@@ -11,6 +11,7 @@ class Step:
         self.status = status
         self.substeps = substeps
         self.pictures = pictures
+        self.tools = tools
 
         # GUI Frames
         self.step_frame = None
