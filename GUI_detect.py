@@ -1011,9 +1011,9 @@ class DisplayGUI:
         self.app = app
         self.app.title("Project Pete")
 
-        # "responsive" sizing
-        self.min_width = int(self.app.winfo_screenwidth() * 0.85)
-        self.min_height = int(self.app.winfo_screenheight() * 0.7)
+        # screw "responsive" sizing, one size to rule them ALL (hardcoded "fullscreen" on Ubuntu)
+        self.min_width = int(self.app.winfo_screenwidth() * 0.9)
+        self.min_height = int(self.app.winfo_screenheight() * 0.9)
         self.app.minsize(width=self.min_width, height=self.min_height)
 
         # Ensure closing of detect thread on quit
@@ -1062,7 +1062,7 @@ class DisplayGUI:
 
         # Create a label to display stream
         self.livestream = tk.Label(self.left_frame, )
-        self.livestream.pack(padx=(80, 50), pady=(40, 0))
+        self.livestream.pack(padx=(20, 20), pady=(20, 20))
 
         # Logs ========================================================
         lw = int(self.left_frame.winfo_screenwidth() * 0.5)
@@ -1092,10 +1092,10 @@ class DisplayGUI:
         sensor_status_thread.start()
         
         # Tools Detected
-        self.tools = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
+        self.tools = tk.Frame(self.performance, width=lw, bg=dark_theme_background)
         self.tools.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
 
-        self.tools_header = tk.Label(self.tools, text="Tools", font=("Arial", 24, 'bold'), justify="center", bg=dark_theme_background)
+        self.tools_header = tk.Label(self.tools, text="Tool Detections", font=("Arial", 24, 'bold'), justify="center", bg=dark_theme_background)
         self.tools_header.pack(fill='x')
 
         # list of Tkinter labels for tools
@@ -1183,7 +1183,7 @@ class DisplayGUI:
 
         for i in range(0, 7):
             if i == 0:
-                title = f"Step {i + 1}, Spindle Installation"
+                title = f"Step {i + 1} - Spindle Installation"
                 description = "Put the spindle (rod-like object in left image) into the axle hole \
                     \nOnce complete, it should look like the image on the right"
                 status = NOT_DONE
@@ -1196,7 +1196,7 @@ class DisplayGUI:
                 tools = []
 
             if i == 1:
-                title = f"Step {i + 1}, Bottom Bracket Installation and Tightening"
+                title = f"Step {i + 1} - Bottom Bracket Installation and Tightening"
                 description = "Place the Double Flat Bottom Bracket into the axle hole \
                     \nThen, turn it clockwise with you fingers to tighten it"
                 status = NOT_DONE
@@ -1213,7 +1213,7 @@ class DisplayGUI:
                 tools = []
 
             if i == 2:
-                title = f"Step {i + 1}, Tighten with Double Flat Wrench"
+                title = f"Step {i + 1} - Tighten with Double Flat Wrench"
                 description = "Use the Double Flat Wrench to tighten the Double Flat Bottom Bracket by turning it clockwise"
                 status = NOT_DONE
                 substeps = ['3.1 - Detect Double Flat Wrench',
@@ -1226,7 +1226,7 @@ class DisplayGUI:
                 tools = [DOUBLE_FLATS_WRENCH]
 
             if i == 3:
-                title = f"Step {i + 1}, Crank Arm Installation"
+                title = f"Step {i + 1} - Crank Arm Installation"
                 description = "Place the Crank Arm into the axle hole"
                 status = NOT_DONE
                 substeps = ['4.1 - Detect Crank Arm',
@@ -1237,7 +1237,7 @@ class DisplayGUI:
                 tools = []
 
             if i == 4:
-                title = f"Step {i + 1}, Bolt Installation"
+                title = f"Step {i + 1} - Bolt Installation"
                 description = "Secure the Crank Arm with the little bolt (bolt in left image) by placing it into the axle hole\
                     \n Then, turn it clockwise with your fingers to tighten it"
                 status = NOT_DONE
@@ -1250,7 +1250,7 @@ class DisplayGUI:
                 tools = []
 
             if i == 5:
-                title = f"Step {i + 1}, Pedal Installation"
+                title = f"Step {i + 1} - Pedal Installation"
                 description = "Place the pedal into the other side of the Crank Arm \
                 \nThen, tighten the bolt on the other side of the pedal to secure it"
                 status = NOT_DONE
@@ -1264,7 +1264,7 @@ class DisplayGUI:
                 tools = []
 
             if i == 6:
-                title = f"Step {i + 1}, Pedal Tightening with Crank Arm"
+                title = f"Step {i + 1} - Pedal Tightening with Crank Arm"
                 description = "Use the Pedal Lockring Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = ['7.1 - Pedal is placed in Bolted-down Crank Arm',
@@ -1337,7 +1337,7 @@ class DisplayGUI:
         Updates detection preview on the left
         """
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame = cv2.resize(frame, (750, 450))
+        frame = cv2.resize(frame, (1040, 585))
         photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
         self.livestream.config(image=photo)
         self.livestream.image = photo
@@ -1377,7 +1377,7 @@ class DisplayGUI:
                 
         # build up the new unwanted tool list 
         for cls_idx in unwanted_detected_class:
-            temp = tk.Label(self.tools, text= str(logic_tools.get_keys_from_value(class_index, cls_idx)) + "\u274c",justify='left',anchor='w', bg=dark_theme_background, fg=unwanted_tools_color, font=("Arial", 16))
+            temp = tk.Label(self.tools, text= str(logic_tools.get_keys_from_value(class_index, cls_idx)) + "\u274c",justify='left',anchor='w', bg=dark_theme_background, fg=unwanted_tools_color, font=("Arial", 15))
             temp.pack(fill='x')
 
             self.unwant_tools_tkinter_list[cls_idx] = temp
@@ -1396,7 +1396,7 @@ class DisplayGUI:
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):
-            temp = tk.Label(self.substep, text=s,justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 16))
+            temp = tk.Label(self.substep, text=s,justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 15))
             temp.pack(fill='x')
             self.substep_list.append(temp)
 

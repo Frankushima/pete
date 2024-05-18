@@ -19,8 +19,6 @@ class Step:
         self.image_frame = None
         self.status_label = None
         self.description_label = None
-        self.title_frame = None
-        self.index_label = None
         self.picture_list = []
 
     def build(self, procedure_list):
@@ -28,9 +26,6 @@ class Step:
 
         self.step_frame = tk.Frame(procedure_list, bg=dark_theme_background)
         self.title_frame = tk.Frame(self.step_frame, bg=color['bg'])
-        self.index_label = tk.Label(self.title_frame, fg=color['txt'], bg=color['bg'], text=str(self.index),
-                                    font=("Arial", 24),
-                                    padx=20, pady=5, width=5, anchor='w')
         self.description_label = tk.Label(self.title_frame, fg=color['txt'], bg=color['bg'], text=self.title, padx=10,
                                           font=("Arial", 20),
                                           pady=5,
@@ -60,7 +55,6 @@ class Step:
         
         # pack into frame
         self.title_frame.pack(fill="both", expand=False)
-        self.index_label.pack(side="left")
         self.description_label.pack(side="left", fill="both", expand=False)
         self.status_label.pack(side="right", fill="y", expand=True)
         self.step_frame.pack(pady=5, padx=10, fill="x", expand=True)
@@ -81,7 +75,6 @@ class Step:
                 self.info_frame.pack_forget()
                 self.image_frame.pack_forget()
 
-        self.index_label.bind(f"<Button-1>", on_click)
         self.description_label.bind(f"<Button-1>", on_click)
 
     def update_status(self, new_status, isFocus=True):
@@ -91,8 +84,6 @@ class Step:
     def _update(self, isFocus):
         color = colors[self.status]
         self.title_frame['bg'] = color['bg']
-        self.index_label['fg'] = color['txt']
-        self.index_label['bg'] = color['bg']
         self.description_label['fg'] = color['txt']
         self.description_label['bg'] = color['bg']
         self.status_label['fg'] = status_color[self.status]
