@@ -317,6 +317,9 @@ def decision_logic():
     # build substeps for step 1
     gui.build_substeps(procedure[current_step])
 
+    # build tools_list for step 1
+    gui.build_tools(procedure[current_step])
+
     # So basically run the validators sequentially when we revert to make sure we restart the validation properly
     while not terminate.is_set():
         step1_validator()
@@ -337,22 +340,20 @@ def decision_logic():
 # ===================== Step Logics ============================
 def step1_validator():
     # variables for trendline, must be initalize outside of steps
-    # Sub3
-    s3_prev_dist_R_Spindle = -math.inf
-    s3_trend_R_Spindle = logic_tools.Trendline.INITIALIZE
-
-    s3_prev_dist_L_Spindle = math.inf
-    s3_trend_L_Spindle = logic_tools.Trendline.INITIALIZE
 
     # Sub5
-    s5_prev_dist_Spindle = -math.inf
-    s5_trend_Spindle = logic_tools.Trendline.INITIALIZE
+    s3_prev_dist_Spindle = -math.inf
+    s3_trend_Spindle = logic_tools.Trendline.INITIALIZE
 
     # Detections Expected: Left Hand, Right Hand, Spindle
-    sub_conditions = [False for i in range(7)]
+    sub_conditions = [False for i in range(5)]
     while current_step == 0:
         data = cv_queue.get()
         num_class_detected = len(data)
+
+        # unneeded tools check (only need hands)
+        wanted_class = [SPINDLE, HAND]
+        gui.update_unwant_tools(data, wanted_class)
 
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
@@ -381,73 +382,9 @@ def step1_validator():
                         gui.update_substep(2)
                         sub_conditions[2] = True
 
-        # SUB 3 : leaving right hand + increasing left hand
-        # TODO: Fix IOU not gonna work for varying size for bounding box
-        # Using Euclidean Distane for now
+        # SUB 3 : leaving hand
         if not sub_conditions[3] and sub_conditions[2] == True:
-            s3_curr_dist_R_Spindle = -1
-            s3_curr_dist_L_Spindle = -1
-
-            if num_class_detected > 1:
-                hand_count, hands_det = logic_tools.find_hands(data)
-                over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                spindle_count, spindle_det = logic_tools.find_class(data, 7)
-
-                if hand_count == 2 and spindle_count == 1:
-                    L_hand_det, R_hand_det = logic_tools.RL_hands(hands_det)
-
-                    spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
-
-                    # Right Hand
-                    R_hand_center = logic_tools.get_box_center(*R_hand_det[:4])
-                    s3_curr_dist_R_Spindle = logic_tools.get_euclidean_distance(R_hand_center, spindle_center)
-
-                    # Spindle Leaving Right Hand
-                    if s3_curr_dist_R_Spindle > s3_prev_dist_R_Spindle:
-                        s3_trend_R_Spindle = logic_tools.Trendline.INCREASING
-
-                    elif s3_curr_dist_R_Spindle < s3_prev_dist_R_Spindle:
-                        s3_trend_R_Spindle = logic_tools.Trendline.DECREASING
-
-                    s3_prev_dist_R_Spindle = s3_curr_dist_R_Spindle
-
-                    # Left Hand
-                    L_hand_center = logic_tools.get_box_center(*L_hand_det[:4])
-                    s3_curr_dist_L_Spindle = logic_tools.get_euclidean_distance(L_hand_center, spindle_center)
-
-                    # Spindling Going to Left Hand
-                    if s3_curr_dist_L_Spindle < s3_prev_dist_L_Spindle:
-                        s3_trend_L_Spindle = logic_tools.Trendline.DECREASING
-
-                    elif s3_curr_dist_L_Spindle > s3_prev_dist_L_Spindle:
-                        s3_trend_L_Spindle = logic_tools.Trendline.INCREASING
-
-                    s3_prev_dist_L_Spindle = s3_curr_dist_L_Spindle
-
-                    # print(f"Left Trend: {s3_trend_L_Spindle} Right Trend: {s3_trend_R_Spindle}")
-                if hand_count == 1 and spindle_count == 1 and s3_trend_R_Spindle == logic_tools.Trendline.INCREASING and s3_trend_L_Spindle == logic_tools.Trendline.DECREASING:
-                    gui.update_substep(3)
-                    sub_conditions[3] = True
-
-        # SUB 4 : passed to left hand
-        if not sub_conditions[4] and sub_conditions[3] == True:
-            over_count = 0
-
-            if num_class_detected > 1:
-                over_count, over_det, over_dict = logic_tools.find_overlapping(data)
-                if over_count == 1:
-                    single_overlap_pair = over_det[0]
-                    # if the overlapping is between spindle and hand
-                    if ((single_overlap_pair[0][5] == SPINDLE and single_overlap_pair[1][5] ==
-                         HAND) or
-                            (single_overlap_pair[0][5] == HAND and single_overlap_pair[1][5] ==
-                             SPINDLE)):
-                        gui.update_substep(4)
-                        sub_conditions[4] = True
-
-        # SUB 5 : leaving left hand
-        if not sub_conditions[5] and sub_conditions[4] == True:
-            s5_curr_dist_Spindle = -1
+            s3_curr_dist_Spindle = -1
 
             if num_class_detected > 1:
                 hand_count, hands_det = logic_tools.find_hands(data)
@@ -458,28 +395,28 @@ def step1_validator():
                     spindle_center = logic_tools.get_box_center(*spindle_det[0][:4])
                     hand_center = logic_tools.get_box_center(*hands_det[0][:4])
 
-                    s5_curr_dist_Spindle = logic_tools.get_euclidean_distance(hand_center, spindle_center)
+                    s3_curr_dist_Spindle = logic_tools.get_euclidean_distance(hand_center, spindle_center)
 
                     # Spindle Leaving Right Hand
-                    if s5_curr_dist_Spindle > s5_prev_dist_Spindle:
-                        s5_trend_Spindle = logic_tools.Trendline.INCREASING
+                    if s3_curr_dist_Spindle > s3_prev_dist_Spindle:
+                        s3_trend_Spindle = logic_tools.Trendline.INCREASING
 
-                    elif s5_curr_dist_Spindle < s5_prev_dist_Spindle:
-                        s5_trend_Spindle = logic_tools.Trendline.DECREASING
+                    elif s3_curr_dist_Spindle < s3_prev_dist_Spindle:
+                        s3_trend_Spindle = logic_tools.Trendline.DECREASING
 
-                    s5_prev_dist_Spindle = s5_curr_dist_Spindle
+                    s3_prev_dist_Spindle = s3_curr_dist_Spindle
 
-            if num_class_detected == 1 and s5_trend_Spindle == logic_tools.Trendline.INCREASING:
-                gui.update_substep(5)
-                sub_conditions[5] = True
+            if num_class_detected == 1 and s3_trend_Spindle == logic_tools.Trendline.INCREASING:
+                gui.update_substep(3)
+                sub_conditions[3] = True
 
-        # SUB 6 : no overlap spingle left behind
-        if not sub_conditions[6] and sub_conditions[5] == True:
+        # SUB 4 : no overlap spingle left behind
+        if not sub_conditions[4] and sub_conditions[3] == True:
             spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
 
             if spindle_count == 1 and num_class_detected == 1:
-                gui.update_substep(6)
-                sub_conditions[6] = True
+                gui.update_substep(4)
+                sub_conditions[4] = True
 
         if all(sub_conditions):
             print("Step 1 Done")
@@ -495,6 +432,9 @@ def step2_validator():
     while current_step == 1:
         data = cv_queue.get()
         num_class_detected = len(data)
+        
+        wanted_class = [DOUBLEFLATS_BOTTOM_BRACKET, HAND, SPINDLE]
+        gui.update_unwant_tools(data, wanted_class)
 
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
@@ -618,11 +558,15 @@ def step3_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
+        wanted_class = [DOUBLE_FLATS_WRENCH, DOUBLEFLATS_BOTTOM_BRACKET, HAND, SPINDLE]
+        gui.update_unwant_tools(data, wanted_class)
+
         # find double flat wrench
         if not sub_conditions[0]:
             double_flat_wrench_count, _ = logic_tools.find_class(data, DOUBLE_FLATS_WRENCH)
             if double_flat_wrench_count == 1:
                 gui.update_substep(0)
+                gui.update_tools(0)
                 sub_conditions[0] = True
 
         # find hands
@@ -729,6 +673,9 @@ def step4_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
+        wanted_class = [CRANK_ARM, DOUBLEFLATS_BOTTOM_BRACKET, HAND, SPINDLE]
+        gui.update_unwant_tools(data, wanted_class)
+
         # find crank arm
         if not sub_conditions[0]:
             double_flat_wrench_count, _ = logic_tools.find_class(data, CRANK_ARM)
@@ -781,6 +728,9 @@ def step5_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
+        wanted_class = [BOLT, CRANK_ARM, HAND]
+        gui.update_unwant_tools(data, wanted_class)
+
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
             hand_count, hands_det = logic_tools.find_hands(data)
@@ -790,7 +740,7 @@ def step5_validator():
                 sub_conditions[0] = True
         # ['found hands', 'found crank arm', 'screwing bolt into crank arm', 'screwed bolt into crank arm'']
         # SUB 1 : is there a pedal wrench? (index = 7)
-        if not sub_conditions[1]:
+        if not sub_conditions[1] and sub_conditions[0] == True:
             crank_count, crank_det = logic_tools.find_class(data, 12)
             if crank_count:
                 # procedure[current_step].update_description(u'Found crank arm👍')
@@ -828,7 +778,7 @@ def step5_validator():
                         sub_conditions[4] = True
 
         if all(sub_conditions[0:5]):
-            print("Step 5 done")
+            print("Step 5 Done")
             gui.mark_step_done(DONE)
             
 def step6_validator():
@@ -838,6 +788,9 @@ def step6_validator():
         # ['found hands', 'found pedal', 'hand holding pedal', 'screwing pedal into crank', 'screwed pedal into crank']
         data = cv_queue.get()
         num_class_detected = len(data)
+
+        wanted_class = [HAND, PEDAL, PEDAL_LOCKRING_WRENCH, CRANK_ARM, BOLT]
+        gui.update_unwant_tools(data, wanted_class)
 
         # SUB 0 : is there a hand?
         if not sub_conditions[0]:
@@ -889,7 +842,6 @@ def step6_validator():
                 gui.update_substep(5)
                 sub_conditions[5] = True
         if all(sub_conditions[0:6]):
-            print("everything done")
             gui.mark_step_done(DONE)
 
 def step7_validator():
@@ -914,7 +866,7 @@ def step7_validator():
     
     # a lil timer
     start_time = time.time()
-    print(f"Started step 7")
+    print(f"Started Step 7")
 
     """
     A) Initial stage condition to be satisfied (i.e. condition for starting stage):
@@ -924,6 +876,9 @@ def step7_validator():
         - bolt is in crank arm: bolt bbox is (mostly) fully within crank arm bbox (given camera is overhead)
     Q: Do these conditions have to be constantly validated throughout the step?
     """
+    data = cv_queue.get()
+    wanted_class = [HAND, PEDAL, PEDAL_LOCKRING_WRENCH, CRANK_ARM, BOLT]
+    gui.update_unwant_tools(data, wanted_class)
 
     initial_stage_satisfied = False
     condition_persistor = Persistor(frames=30, condition_name="Initial Stage")
@@ -966,6 +921,16 @@ def step7_validator():
 
     gui.update_substep(0)  # substep 1 satisfied
 
+    # Check for Tool Existing
+    substeptwo_in_progress = True
+    while substeptwo_in_progress:
+        # Check if there is a Pedal Lockring Wrench
+        pedal_wrench, _ = logic_tools.find_class(data, PEDAL_LOCKRING_WRENCH)
+        if pedal_wrench == 1:
+            gui.update_substep(1)
+            gui.update_tools(0)
+            substeptwo_in_progress = False
+        
     """
     B) In-progress conditions to be satisfied:
         1. hand intersecting greatly with pedal wrench (for the duration of rotation being sensed/detected)
@@ -1007,8 +972,9 @@ def step7_validator():
             # takes max to determine the iou of the most likely hand holding wrench (???)
             hand_pedal_lockring_iou = max([bbox_iou(hand[:4], pedal_wrench[:4]) for hand in hands])
 
+            # HACK: Hardcoding 'num_rotations'+1 to match with the added substep
             if sensor_data['num_rotations'] != num_rotations:
-                gui.update_substep(sensor_data['num_rotations'])
+                gui.update_substep(sensor_data['num_rotations']+1)
                 num_rotations = sensor_data['num_rotations']
 
             if num_rotations < MIN_ROTATION and condition_persistor.verify():
@@ -1124,6 +1090,20 @@ class DisplayGUI:
         sensor_status_thread = threading.Thread(target=self._update_sensor_status)
         sensor_status_thread.daemon = True
         sensor_status_thread.start()
+        
+        # Tools Detected
+        self.tools = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
+        self.tools.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
+
+        self.tools_header = tk.Label(self.tools, text="Tools", font=("Arial", 24, 'bold'), justify="center", bg=dark_theme_background)
+        self.tools_header.pack(fill='x')
+
+        # list of Tkinter labels for tools
+        self.tools_list = []
+
+        # list of Tkinter labels for unwanted tools
+        self.unwant_tools_tkinter_list = [None for _ in range(len(class_index))]
+
 
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
@@ -1210,11 +1190,10 @@ class DisplayGUI:
                 substeps = ['1.1 - Detect Hands',
                             '1.2 - Detect Spindle',
                             '1.3 - Hand holding Spindle',
-                            '1.4 - Passed to Left Hand',
-                            '1.5 - Spindle on Left Hand',
-                            '1.6 - Spindle leaves Left Hand',
-                            '1.7 - Spindle Alone']
+                            '1.4 - Spindle leaves Hand',
+                            '1.5 - Spindle Alone']
                 pictures = ['step1.1.png', 'step1.2.png']
+                tools = []
 
             if i == 1:
                 title = f"Step {i + 1}, Bottom Bracket Installation and Tightening"
@@ -1222,7 +1201,7 @@ class DisplayGUI:
                     \nThen, turn it clockwise with you fingers to tighten it"
                 status = NOT_DONE
                 substeps = ['2.1 - Detect Hands',
-                            '2.2 - Detect Fouble Flat Bottom Bracket',
+                            '2.2 - Detect Double Flat Bottom Bracket',
                             '2.3 - Detect Spindle',
                             '2.4 - Single Hand Holding Double Flat Bottom Bracket',
                             '2.5 - Detect Complete Overlap of Double Flat Bottom Bracket over Spindle',
@@ -1231,6 +1210,7 @@ class DisplayGUI:
                             '2.8 - Confirm Double Flat Bottom Bracket completely overlaps Spindle',
                             '2.9 - Double Flat Bottom Bracket and Spindle left behind only']
                 pictures = ['step2.png']
+                tools = []
 
             if i == 2:
                 title = f"Step {i + 1}, Tighten with Double Flat Wrench"
@@ -1243,6 +1223,7 @@ class DisplayGUI:
                             '3.5 - Tighten by THREE Rotations and Complete overlap Detected',
                             '3.6 - Hand Out of Field']
                 pictures = ['step3.png']
+                tools = [DOUBLE_FLATS_WRENCH]
 
             if i == 3:
                 title = f"Step {i + 1}, Crank Arm Installation"
@@ -1253,6 +1234,7 @@ class DisplayGUI:
                             '4.3 - Detect Single Hand Overlap over Crank Arm',
                             '4.4 - Hand Out of Field']
                 pictures = ['step4.png']
+                tools = []
 
             if i == 4:
                 title = f"Step {i + 1}, Bolt Installation"
@@ -1265,6 +1247,7 @@ class DisplayGUI:
                             '5.4 - Screwed Bolt into Crank Arm',
                             '5.4 - Detached Hands and Bolt']
                 pictures = ['step5.1.png', 'step5.2.png']
+                tools = []
 
             if i == 5:
                 title = f"Step {i + 1}, Pedal Installation"
@@ -1278,18 +1261,21 @@ class DisplayGUI:
                             '6.5 - Screwed Pedal into Crank',
                             '6.6 - Detached Hand and Pedal']
                 pictures = ['step6.png']
+                tools = []
 
             if i == 6:
                 title = f"Step {i + 1}, Pedal Tightening with Crank Arm"
-                description = "Use the Pedal Locking Wrench (left image) to secure the bolt on the other side of the pedal"
+                description = "Use the Pedal Lockring Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = ['7.1 - Pedal is placed in Bolted-down Crank Arm',
-                            '7.2 - Secure Pedal using Pedal Wrench (rotation 1/3)',
-                            '7.3 - Secure Pedal using Pedal Wrench (rotation 2/3)',
-                            '7.4 - Secure Pedal using Pedal Wrench (rotation 3/3)']
+                            '7.2 - Pedal Lockring Wrench is Detected',
+                            '7.3 - Secure Pedal using Pedal Wrench (rotation 1/3)',
+                            '7.4 - Secure Pedal using Pedal Wrench (rotation 2/3)',
+                            '7.5 - Secure Pedal using Pedal Wrench (rotation 3/3)']
                 pictures = ['step7.1.png', 'step7.2.png']
+                tools = [PEDAL_LOCKRING_WRENCH]
 
-            s = Step(i, title, description, status, substeps, pictures)
+            s = Step(i, title, description, status, substeps, pictures, tools)
 
             procedure.append(s)
 
@@ -1311,9 +1297,13 @@ class DisplayGUI:
         if isLastStep: return
 
         self.clear_substeps()
+        self.clear_tools()
+
         current_step += 1
+
         procedure[current_step].update_status(IN_PROGRESS, isFocus=True)
         self.build_substeps(procedure[current_step])
+        self.build_tools(procedure[current_step])
 
     def override_mark_done(self, e):
         """
@@ -1328,6 +1318,8 @@ class DisplayGUI:
 
         # allow for reverting last step
         self.clear_substeps()
+        self.clear_tools()
+
         isLastStep = current_step == len(procedure) - 1
         if isLastStep and (procedure[current_step].status == DONE or procedure[current_step].status == DONE_OV):
             procedure[current_step].update_status(IN_PROGRESS)
@@ -1335,7 +1327,9 @@ class DisplayGUI:
             current_step -= 1
             procedure[current_step].update_status(IN_PROGRESS)
             procedure[current_step + 1].update_status(NOT_DONE, isFocus=False)
+
         self.build_substeps(procedure[current_step])
+        self.build_tools(procedure[current_step])
         self.canvas.yview_moveto(-1.0)
 
     def set_frame(self, frame):
@@ -1347,6 +1341,58 @@ class DisplayGUI:
         photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
         self.livestream.config(image=photo)
         self.livestream.image = photo
+
+    def build_tools(self, step):
+        for tool in step.tools:
+            temp = tk.Label(self.tools, text=str(logic_tools.get_keys_from_value(class_index, tool)),justify='left',anchor='w', bg=dark_theme_background, font=("Arial", 16))
+            temp.pack(fill='x')
+            self.tools_list.append(temp)
+
+    def update_tools(self, index):
+        if not procedure[current_step].tools or self.tools_list[index]['text'][-1] == "\u2713":
+            return
+
+        self.tools_list[index]['fg'] = substep_complete_text_color
+        self.tools_list[index]['text'] += " \u2713 "
+
+    def update_unwant_tools(self, data, wanted_class):
+        # set up
+        detected_class = []
+        for det in data:
+            detected_class.append(det[5])
+
+        unwanted_detected_class = []
+        for cls_idx in detected_class:     
+            if cls_idx not in wanted_class:
+                unwanted_detected_class.append(int(cls_idx))
+        
+        # look for no longer detecting unwanted tools in the tkinter list and forget them
+        for idx, label in enumerate(self.unwant_tools_tkinter_list):
+            if label is not None and idx not in unwanted_detected_class:
+                label.pack_forget()
+                label = None
+            
+            elif label is not None and idx in unwanted_detected_class:
+                unwanted_detected_class.remove(idx)
+                
+        # build up the new unwanted tool list 
+        for cls_idx in unwanted_detected_class:
+            temp = tk.Label(self.tools, text= str(logic_tools.get_keys_from_value(class_index, cls_idx)) + "\u274c",justify='left',anchor='w', bg=dark_theme_background, fg=unwanted_tools_color, font=("Arial", 16))
+            temp.pack(fill='x')
+
+            self.unwant_tools_tkinter_list[cls_idx] = temp
+
+    
+    def clear_tools(self):
+        for _ in range(len(self.tools_list)):
+            temp = self.tools_list.pop()
+            temp.destroy()
+        
+        for label in self.unwant_tools_tkinter_list:
+            if label is not None:
+                label.pack_forget()
+                label.destroy()
+                label = None
 
     def build_substeps(self, step):
         for i, s in enumerate(step.substeps):
