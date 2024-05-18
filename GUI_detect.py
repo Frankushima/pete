@@ -1065,7 +1065,7 @@ class DisplayGUI:
         self.loading_frame = tk.Frame(self.app, bg=space_grey_background)
         self.loading_frame.pack(fill="both", expand=True)
 
-        logo = ImageTk.PhotoImage(Image.open('pete.png').resize((445, 200)))
+        logo = ImageTk.PhotoImage(Image.open('pete.png').resize((600, 250)))
         self.logo_label = tk.Label(self.loading_frame, bg=space_grey_background)
         self.logo_label.pack(pady=50)
         self.logo_label.config(image=logo)
