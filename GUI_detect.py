@@ -1,44 +1,41 @@
 import argparse
-import time
-from pathlib import Path
-
-import cv2
-import torch
-import torch.backends.cudnn as cudnn
-from numpy import random
-import numpy as np
-
-import logic_tools
-from models.experimental import attempt_load
-from utils.datasets import LoadStreams, LoadImages
-from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
-    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, bbox_iou
-from utils.plots import plot_one_box
-from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
-
+import queue
+import socket
 import threading
 import time
 import tkinter as tk
-from CustomScrollBar import ScrollBar
-from shared import *
-from Step import Step
-from PIL import Image, ImageTk
-
-from logic_tools import *
-import queue
-import math
-import emoji
-
 from collections import Counter
+from pathlib import Path
+
+import cv2
+import torch.backends.cudnn as cudnn
+from PIL import Image, ImageTk
+from numpy import random
+
+import logic_tools
+from CustomScrollBar import ScrollBar
+from Step import Step
+from logic_tools import *
+from models.experimental import attempt_load
+from shared import *
+from utils.datasets import LoadStreams, LoadImages
+from utils.general import check_img_size, check_imshow, non_max_suppression, apply_classifier, \
+    scale_coords, xyxy2xywh, set_logging, increment_path
+from utils.plots import plot_one_box
+from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
 
 current_step = 0
 procedure = []
 gui = None
-detect_ready = threading.Event()
+
 cv_queue = queue.Queue()
 sensor_queue = queue.Queue()
+
+detect_ready = threading.Event()
 terminate = threading.Event()
 sensor_in_use = threading.Event()
+sensor_ready = threading.Event()
+sensor_data_block = queue.Queue()
 
 def detect(save_img=False):
     global gui, cv_queue
@@ -225,42 +222,64 @@ def detect(save_img=False):
 
 
 sample = 0
-dummy_sensor_data = process("./test_sensor_data/output.txt")
 ewma_sd = 0  # ewma sensor data
 sum_sd = 0
+num_rot = 0
+is_rotating = False
+DEGREES_IN_ROTATION = 280        # threshold for rotation (i.e. how many degrees make up 1 rotation)
 def sensor_detect():
     """
-    Dummy sensor
+    Sensor (is meant to calculate only CCW rotation)
     """
-    global sensor_in_use, terminate, sensor_queue, sample, ewma_sd, sum_sd
+    global sensor_in_use, terminate
 
     while not terminate.is_set():
         # if not using sensor tool, simply ignore data
         if not sensor_in_use.is_set():
             time.sleep(1)
         else:
-            # print("sensor in use = ================================================")
+            # print("sensor in use = ========x========================================")
+            data_dict = {}
+            global sensor_data_block, sensor_queue, sample, ewma_sd, sum_sd, num_rot, is_rotating
+
+            data_block = sensor_data_block.get()
+            for sensor in data_block:
+                readings = sensor.split()
+
+                key = readings[0]
+                if key == "Temp:":
+                    key = "Temp"
+                    values = readings[1]
+                else:
+                    values = [float(val) for val in readings[1:] if not ":" in val]
+                data_dict[key] = values
+            angle_z = data_dict['Angle'][2]
 
             # Read in + a lil EWMA
             if sample == 0:
-                ewma_sd = dummy_sensor_data[sample] * 1.4
+                ewma_sd = angle_z * 1.4
             else:
-                ewma_sd = 0.75 * ewma_sd + 0.25 * dummy_sensor_data[
-                    sample % len(dummy_sensor_data)] * 1.4  # 1.4 for calibration purposes
-            sum_sd += ewma_sd
+                ewma_sd = 0.75 * ewma_sd + 0.25 * angle_z * 1.4  # 1.4 for calibration purposes
+            sum_sd_i = max(0, sum_sd + ewma_sd)
             sample += 1
 
-            # Matching camera and sensor via sampling rate (ceiling)
-            if not camera_sensor_frame_match(x=sample): continue
-
-            # Process (should also increase sampling rate since processing takes time?)
-            is_rotating = ewma_sd > 3.5  # lmao
+            # Processing: calculates if it's rotating based on previous and current reading
+            is_rotating = (1 if is_rotating else -1) * 0.3 + sum_sd_i - sum_sd > 0.5
+            num_rot = max(num_rot, int(sum_sd / DEGREES_IN_ROTATION))
 
             data = {
+                # 'sub diffx': sum_sd_i - sum_sd,
+                # 'avg_rot': sum_sd_i,
                 'rotating': is_rotating,
-                'degrees': sum_sd,
-                'num_rotations': int(sum_sd / 360),
+                'degrees': sum_sd_i,
+                'num_rotations': num_rot,
+                'sample': sample
             }
+
+            sum_sd = sum_sd_i
+
+            # take every 4th frame. FPS corresponds to stream FPS.
+            if not camera_sensor_frame_match(x=sample, sr=10, fps=30) or sample % 4 != 0: continue
 
             sensor_queue.put(data)
             time.sleep(0.1)  # a bit delay to prevent thread dying
@@ -946,7 +965,7 @@ def step7_validator():
         pedal_wrench = data[data[:, 5] == PEDAL_LOCKRING_WRENCH][0]
 
         sensor_data = sensor_queue.get()
-        # print(sensor_data, "\n")
+        print(sensor_data, "\n")
         if sensor_data['rotating']:
             # print(f"detecting rotation...({sensor_data['num_rotations']}/3)")
             pedal_pedal_lockring_iou = bbox_iou(pedal_wrench[:4], pedal[:4])
@@ -1064,6 +1083,14 @@ class DisplayGUI:
         runtime_thread.daemon = True
         runtime_thread.start()
 
+        # Create a label to display the sensor connection status
+        self.sensor_status_label = tk.Label(self.performance, bg=dark_theme_background, text="Sensor: Signal Lost...",  fg="red")
+        self.sensor_status_label.pack(padx=(100, 0))
+
+        sensor_status_thread = threading.Thread(target=self._update_sensor_status)
+        sensor_status_thread.daemon = True
+        sensor_status_thread.start()
+        
         # Tools Detected
         self.tools = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
         self.tools.pack(padx=(80,0), pady=(10,0), side="left", fill="both", expand=True)
@@ -1076,6 +1103,7 @@ class DisplayGUI:
 
         # list of Tkinter labels for unwanted tools
         self.unwant_tools_tkinter_list = [None for _ in range(len(class_index))]
+
 
         # Substep Progress
         self.substep = tk.Frame(self.left_frame, width=lw, bg=dark_theme_background)
@@ -1398,6 +1426,8 @@ class DisplayGUI:
         self.procedure_tracking_setup(self.app)
 
         # Sensor  ===================================
+        sensor_ready.wait()
+        print("sensor ready")
         sensor_thread = threading.Thread(target=sensor_detect, args=[])
         sensor_thread.daemon = True
         sensor_thread.start()
@@ -1440,6 +1470,97 @@ class DisplayGUI:
 
             time.sleep(1)  # Update the label every 1 second
 
+    def _update_sensor_status(self):
+        global sensor_ready
+        while True:
+            if sensor_ready.is_set():
+                self.sensor_status_label.config(text="Sensor: Connected", fg="green")
+            else:
+                self.sensor_status_label.config(text="Sensor: Disconnected", fg="red")
+
+            time.sleep(1)
+
+# Note the port numbers!!!
+# # MY HOUSE AND FRANKS
+
+# EDUROAM IPS
+servers = [
+    # {'ip': '169.231.202.206', 'port': 8000},  # Double Flat
+    {'ip': '169.231.192.50', 'port': 8001},  # Pedal Wrench
+]
+
+def connect_to_server(ip, port):
+    global sensor_data_block
+    while True:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                # Set a timeout after not connecting after 10 seconds
+                s.settimeout(10)
+                print(f"Attempting to connect to {ip}:{port}")
+                s.connect((ip, port))
+                print(f"\nConnected to server {ip}:{port}")
+
+                complete_data = ""
+                data_block = []
+                try:
+                    sensor_ready.set()
+                    while True:
+                        recv_data = s.recv(1024).decode()
+                        if not recv_data:
+                            if data_block:
+                                # Remaining data that hsan't been processed
+                                sensor_data_block.put(data_block)
+                            break  # No more data, connection closed
+
+                        complete_data += recv_data
+                        while '\n' in complete_data:
+                            line, complete_data = complete_data.split('\n', 1)
+                            if line.strip() == "": continue
+                            data_block.append(line.strip())
+                            if len(data_block) == 3:
+                                sensor_data_block.put(data_block)
+                                data_block = []  # Reset for next block of data
+                except socket.timeout:
+                    print(f"Connection to {ip}:{port} timed out. Retrying...")
+                    s.close()  # Ensure the socket is closed before retrying
+                    sensor_ready.clear()
+                    time.sleep(1)  # Wait a bit before retrying to avoid hammering the server too quickly
+                except Exception as e:
+                    print(f"Error during connection or file operation: {e}")
+                    sensor_ready.clear()
+                    break
+            print(f"Disconnected from server {ip}:{port}")
+        except socket.timeout:
+                print(f"Connection to {ip}:{port} timed out. Retrying...")
+                s.close()  # Ensure the socket is closed before retrying
+                sensor_ready.clear()
+                time.sleep(1)  # Wait a bit before retrying to avoid hammering the server too quickly
+        except socket.error as err:
+                print(f"Socket error: {err}")
+                s.close()
+                sensor_ready.clear()
+                time.sleep(1)  # Wait a bit before retrying
+        except Exception as e:
+            print(f"Error during connection or file operation: {e}")
+            s.close()
+            sensor_ready.clear()
+            break
+        finally:
+            s.close()
+            sensor_ready.clear()
+
+def start_sensors():
+    threads = []
+    for tool in servers:
+        print(tool['ip'])
+        thread = threading.Thread(target=connect_to_server, args=(tool['ip'], tool['port']))
+        thread.start()
+        threads.append(thread)
+
+    print("ACTIVE THREADS: ", threads)
+
+    for thread in threads:
+        thread.join()  # Wait for all threads to complete
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -1465,6 +1586,10 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     print(opt)
     # check_requirements(exclude=('pycocotools', 'thop'))
+
+    run_sensors = threading.Thread(target=start_sensors, args=[])
+    run_sensors.daemon = True
+    run_sensors.start()
 
     root = tk.Tk()
     gui = DisplayGUI(root)
