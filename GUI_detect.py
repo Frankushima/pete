@@ -917,7 +917,8 @@ def step7_validator():
     # Check for Tool Existing
     substeptwo_in_progress = True
     while substeptwo_in_progress:
-        print(time.time(), data[:, 5])
+        data = cv_queue.get()
+        # print(time.time(), data[:, 5])
         # Check if there is a Pedal Locking Wrench
         pedal_wrench, _ = logic_tools.find_class(data, PEDAL_LOCKING_WRENCH)
         if pedal_wrench == 1:
@@ -1257,7 +1258,7 @@ class DisplayGUI:
                             '3.2 - Detect Hands',
                             '3.3 - Detect Hand Overlap',
                             '3.4 - Complete Overlap of Wrench over Double Flat Bottom Bracket',
-                            '3.5 - Tighten by THREE Rotations and Complete overlap Detected',
+                            '3.5 - Tighten Bracket and Complete overlap Detected',
                             '3.6 - Hand Out of Field']
                 pictures = ['step3.png']
                 tools = [DOUBLE_FLATS_WRENCH]
