@@ -48,7 +48,7 @@ MONKEY_WRENCH = 1
 ALLEN_KEY = 2
 DOUBLE_FLATS_WRENCH = 3
 HAND = 4
-PEDAL_LOCKRING_WRENCH = 5
+PEDAL_LOCKING_WRENCH = 5
 CRANK_REMOVER = 6
 SPINDLE = 7
 DOUBLEFLATS_BOTTOM_BRACKET = 8
@@ -63,7 +63,7 @@ class_index = {
     'allenkey': 2,
     'doubleflatswrench': 3,
     'hand': 4,
-    'pedallockringwrench': 5,
+    'pedallockingwrench': 5,
     'crankremover': 6,
     'spindle': 7,
     'doubleFlatsBottomBracket': 8,

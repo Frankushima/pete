@@ -474,11 +474,9 @@ def step2_validator():
             double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
             spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
 
-            if double_flat_bb_count == 1 and spindle_count == 1:
+            if double_flat_bb_count and spindle_count:
                 double_flat_bb_det = double_flat_bb_det[0]
                 spindle_det = spindle_det[0]
-
-            if double_flat_bb_count and spindle_count:
                 complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
                 if complete_overlap:
                     gui.update_substep(4)
@@ -491,14 +489,11 @@ def step2_validator():
 
             if hand_count > 1:
                 _, R_hand = logic_tools.RL_hands(hand_det)
-
             else:
                 R_hand = hand_det[0]
 
-            if double_flat_bb_count == 1:
-                double_flat_bb_det = double_flat_bb_det[0]
-
             if double_flat_bb_count:
+                double_flat_bb_det = double_flat_bb_det[0]
                 complete_overlap = logic_tools.complete_overlap(R_hand, double_flat_bb_det)
                 if complete_overlap:
                     gui.update_substep(5)
@@ -516,11 +511,9 @@ def step2_validator():
             double_flat_bb_count, double_flat_bb_det = logic_tools.find_class(data, DOUBLEFLATS_BOTTOM_BRACKET)
             spindle_count, spindle_det = logic_tools.find_class(data, SPINDLE)
 
-            if double_flat_bb_count == 1 and spindle_count == 1:
+            if double_flat_bb_count and spindle_count:
                 double_flat_bb_det = double_flat_bb_det[0]
                 spindle_det = spindle_det[0]
-
-            if double_flat_bb_count and spindle_count:
                 complete_overlap = logic_tools.complete_overlap(double_flat_bb_det, spindle_det)
                 if complete_overlap:
                     gui.update_substep(7)
@@ -789,7 +782,7 @@ def step6_validator():
         data = cv_queue.get()
         num_class_detected = len(data)
 
-        wanted_class = [HAND, PEDAL, PEDAL_LOCKRING_WRENCH, CRANK_ARM, BOLT]
+        wanted_class = [HAND, PEDAL, PEDAL_LOCKING_WRENCH, CRANK_ARM, BOLT]
         gui.update_unwant_tools(data, wanted_class)
 
         # SUB 0 : is there a hand?
@@ -877,7 +870,7 @@ def step7_validator():
     Q: Do these conditions have to be constantly validated throughout the step?
     """
     data = cv_queue.get()
-    wanted_class = [HAND, PEDAL, PEDAL_LOCKRING_WRENCH, CRANK_ARM, BOLT]
+    wanted_class = [HAND, PEDAL, PEDAL_LOCKING_WRENCH, CRANK_ARM, BOLT]
     gui.update_unwant_tools(data, wanted_class)
 
     initial_stage_satisfied = False
@@ -924,8 +917,9 @@ def step7_validator():
     # Check for Tool Existing
     substeptwo_in_progress = True
     while substeptwo_in_progress:
-        # Check if there is a Pedal Lockring Wrench
-        pedal_wrench, _ = logic_tools.find_class(data, PEDAL_LOCKRING_WRENCH)
+        print(time.time(), data[:, 5])
+        # Check if there is a Pedal Locking Wrench
+        pedal_wrench, _ = logic_tools.find_class(data, PEDAL_LOCKING_WRENCH)
         if pedal_wrench == 1:
             gui.update_substep(1)
             gui.update_tools(0)
@@ -954,7 +948,7 @@ def step7_validator():
         data = cv_queue.get()  # [[xyxy(4), conf(1), class(1)], ...]
 
         # if necessary objs do not exist (caveat: glitch/hidden for brief moment)
-        if len(data[data[:, 5] == PEDAL_LOCKRING_WRENCH]) == 0 or len(data[data[:, 5] == PEDAL]) == 0 or len(
+        if len(data[data[:, 5] == PEDAL_LOCKING_WRENCH]) == 0 or len(data[data[:, 5] == PEDAL]) == 0 or len(
                 data[data[:, 5] == HAND]) == 0:
             continue
 
@@ -965,7 +959,7 @@ def step7_validator():
         
         pedal_count, pedal_det = logic_tools.find_class(data, PEDAL)
         hand_count, hand_det = logic_tools.find_class(data, HAND)
-        pedal_wrench_count, pedal_wrench_det = logic_tools.find_class(data,PEDAL_LOCKRING_WRENCH)
+        pedal_wrench_count, pedal_wrench_det = logic_tools.find_class(data,PEDAL_LOCKING_WRENCH)
         
         pedal = pedal_det[0]
         hands = hand_det
@@ -1308,15 +1302,15 @@ class DisplayGUI:
 
             if i == 6:
                 title = f"Step {i + 1} - Pedal Tightening with Crank Arm"
-                description = "Use the Pedal Lockring Wrench (left image) to secure the bolt on the other side of the pedal"
+                description = "Use the Pedal Locking Wrench (left image) to secure the bolt on the other side of the pedal"
                 status = NOT_DONE
                 substeps = ['7.1 - Pedal is placed in Bolted-down Crank Arm',
-                            '7.2 - Pedal Lockring Wrench is Detected',
+                            '7.2 - Pedal Locking Wrench is Detected',
                             '7.3 - Secure Pedal using Pedal Wrench (rotation 1/3)',
                             '7.4 - Secure Pedal using Pedal Wrench (rotation 2/3)',
                             '7.5 - Secure Pedal using Pedal Wrench (rotation 3/3)']
                 pictures = ['step7.1.png', 'step7.2.png']
-                tools = [PEDAL_LOCKRING_WRENCH]
+                tools = [PEDAL_LOCKING_WRENCH]
 
             s = Step(i, title, description, status, substeps, pictures, tools)
 
@@ -1404,10 +1398,10 @@ class DisplayGUI:
         for det in data:
             detected_class.append(det[5])
 
-        unwanted_detected_class = []
+        unwanted_detected_class = set() # Set to avoid duplicates
         for cls_idx in detected_class:     
             if cls_idx not in wanted_class:
-                unwanted_detected_class.append(int(cls_idx))
+                unwanted_detected_class.add(int(cls_idx))
         
         # look for no longer detecting unwanted tools in the tkinter list and forget them
         for idx, label in enumerate(self.unwant_tools_tkinter_list):
@@ -1534,7 +1528,7 @@ servers = [
 
 def connect_to_server(ip, port):
     global sensor_data_block
-    while True:
+    for _ in range(10): # only attempt like 10 times, give up otherwise
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 # Set a timeout after not connecting after 10 seconds
