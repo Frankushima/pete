@@ -123,6 +123,11 @@ def detect(save_img=False):
 
         # Process detections
         temp = [None, None]
+
+        # Flag for detecting Left Right hand last frame (lf)
+        RL_hand_lf = False
+        L_hand_center_lf = None
+        R_hand_center_lf = None
         for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), dataset.count
@@ -162,15 +167,39 @@ def detect(save_img=False):
 
                             if torch.all(xyxy_list_tensor == L_hand_det[:4]):
                                 label = f"Left Hand {conf:.2f}"
-                                plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
-                            elif torch.all(xyxy_list_tensor == R_hand_det[:4]):
-                                label = f"Right Hand {conf:.2f}"
+                                if RL_hand_lf and R_hand_center_lf and L_hand_center_lf:
+                                    L_hand_center = logic_tools.get_box_center(*L_hand_det[:4])
+                                    to_lf_right = logic_tools.get_euclidean_distance(L_hand_center, R_hand_center_lf)
+                                    to_lf_left = logic_tools.get_euclidean_distance(L_hand_center, L_hand_center_lf)
+                                    if to_lf_right > to_lf_left:
+                                        print("OVERWRITE: Less x becomes Right hand")
+                                        label = f"Right Hand {conf:.2f}"
+                                
                                 plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
+                            elif torch.all(xyxy_list_tensor == R_hand_det[:4]):
+                                label = f"Right Hand {conf:.2f}"
+                                if RL_hand_lf and R_hand_center_lf and L_hand_center_lf:
+                                    R_hand_center = logic_tools.get_box_center(*R_hand_det[:4])
+                                    to_lf_right = logic_tools.get_euclidean_distance(R_hand_center, R_hand_center_lf)
+                                    to_lf_left = logic_tools.get_euclidean_distance(R_hand_center, L_hand_center_lf)
+                                    if to_lf_left < to_lf_right:
+                                        label = f"Left Hand {conf:.2f}"
+                                        
+                                plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
 
                         else:
                             label = f'{names[int(cls)]} {conf:.2f}'
                             plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=3)
+
+                    if hand_count == 2:
+                        RL_hand_lf = True
+                        R_hand_center_lf = logic_tools.get_box_center(*R_hand_det[:4])
+                        L_hand_center_lf = logic_tools.get_box_center(*L_hand_det[:4])
+                        
+                    else:
+                        RL_hand_lf = False
+                
             temp[i] = im0
 
             # Print time (inference + NMS)
@@ -1219,7 +1248,7 @@ class DisplayGUI:
 
         # clear out and initialize procedure + step count
         procedure = []
-        current_step = 0
+        current_step = 6
 
         # dummy steps
         # TODO: define steps & their individual criteria
